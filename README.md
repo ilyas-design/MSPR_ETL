@@ -1,31 +1,128 @@
-# Lancer l'ETL
+# HealthAI Coach — MSPT ETL 2
 
-Ce dépôt contient un script `etl.py` qui charge et nettoie trois fichiers CSV.
+Plateforme de santé connectée intégrant un pipeline ETL, une API REST Django et un frontend React.
 
-Prérequis
-- Python 3.8+
-- pip
+## Architecture
 
-Installation (recommandé)
+```
+MSPT_ETL_2/
+├── Pipelines/          # Module ETL (extraction, transformation, chargement)
+├── backend/            # API REST Django + JWT
+├── frontend/           # SPA React + Vite
+├── run_pipeline.py     # Point d'entrée ETL
+├── *.csv / *.json      # Données sources
+└── docker-compose.yml  # Orchestration Docker
+```
+
+### Ce que génère l'ETL
+
+L'ETL lit les fichiers sources et produit :
+
+- **`mspr_etl.db`** — base SQLite avec 7 tables :
+
+| Table | Source |
+|---|---|
+| `patient` | `diet_recommendations.csv` |
+| `sante` | `diet_recommendations.csv` |
+| `nutrition` | `diet_recommendations.csv` |
+| `activite_physique` | `diet_recommendations.csv` |
+| `gym_session` | `gym_members_exercise.csv` |
+| `food_log` | `daily_food_nutrition.csv` |
+| `exercise` | `exercises.json` |
+
+- **`reports/etl_report_YYYYMMDD_HHMMSS.json`** — rapport d'exécution (validation, métriques, logs)
+
+---
+
+## Lancer avec Docker (recommandé)
+
+Prérequis : [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
 ```bash
-python3 -m venv .venv
+docker compose up --build
+```
+
+L'application est accessible sur **http://localhost**
+
+L'ordre de démarrage est géré automatiquement : ETL → Backend → Frontend.
+
+Pour relancer sans reconstruire les images :
+
+```bash
+docker compose up
+```
+
+---
+
+## Lancer sans Docker
+
+### Prérequis
+
+- Python 3.12+
+- Node.js 22+
+
+### 1. Environnement virtuel Python
+
+**Linux / macOS / Git Bash :**
+```bash
+python -m venv .venv
 source .venv/bin/activate
+```
+
+**Windows PowerShell :**
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+### 2. ETL — générer la base de données
+
+```bash
 pip install -r requirements.txt
+python run_pipeline.py
+# → génère mspr_etl.db à la racine
 ```
 
-Exemples d'exécution
-- Exécuter en utilisant le dossier du script (par défaut les CSV doivent être dans le même dossier que `etl.py`) :
+Options disponibles :
 ```bash
-python etl.py
+python run_pipeline.py --data-dir .         # dossier des CSV (défaut: .)
+python run_pipeline.py --db-path custom.db  # chemin de la base (défaut: mspr_etl.db)
+python run_pipeline.py --report-dir reports # dossier des rapports (défaut: reports)
+python run_pipeline.py --no-validate        # désactiver la validation
+python run_pipeline.py --no-report          # désactiver la génération de rapport
 ```
-- Spécifier explicitement le dossier contenant les CSV :
+
+### 3. Backend — API Django
+
 ```bash
-python etl.py --data-dir /chemin/vers/dossier_avec_csv
+cd backend
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+# → http://localhost:8000
 ```
 
-Remarques
-- Le script vérifie la présence de `daily_food_nutrition.csv`, `diet_recommendations.csv` et `gym_members_exercise.csv` avant de démarrer.
-- `pyspark` démarre Spark en mode local par défaut. Pour une exécution sur un cluster, configurez `SPARK_HOME` et les options Spark appropriées.
-- Évitez les espaces superflus dans les chemins.
+Documentation API (Swagger) : http://localhost:8000/api/schema/swagger-ui/
 
-Si vous souhaitez, je peux aussi ajouter un petit script shell `run_etl.sh` pour automatiser l'activation du venv et le lancement.# MSPT_ETL_2
+### 4. Frontend — React
+
+```bash
+cd frontend
+npm install
+npm run dev
+# → http://localhost:5173
+```
+
+Le proxy Vite redirige automatiquement `/api` vers `http://localhost:8000`.
+
+---
+
+## Variables d'environnement
+
+Copier `.env` et adapter si besoin :
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `SECRET_KEY` | valeur de dev | Clé secrète Django |
+| `DEBUG` | `False` | Mode debug Django |
+| `DB_PATH` | `/data/mspr_etl.db` | Chemin de la base SQLite (Docker) |

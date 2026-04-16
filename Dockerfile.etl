@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY Pipelines/ ./Pipelines/
+COPY run_pipeline.py .
+COPY *.csv .
+COPY exercises.json .
+
+RUN mkdir -p /data /data/reports
+
+CMD ["python", "run_pipeline.py", \
+     "--db-path", "/data/mspr_etl.db", \
+     "--data-dir", ".", \
+     "--report-dir", "/data/reports"]

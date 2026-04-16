@@ -1,0 +1,34 @@
+services:
+  etl:
+    build:
+      context: .
+      dockerfile: Dockerfile.etl
+    volumes:
+      - sqlite_data:/data
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+    volumes:
+      - sqlite_data:/data
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-changeme-in-production}
+      - DEBUG=${DEBUG:-False}
+      - DB_PATH=/data/mspr_etl.db
+    expose:
+      - "8000"
+    depends_on:
+      etl:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  sqlite_data:
