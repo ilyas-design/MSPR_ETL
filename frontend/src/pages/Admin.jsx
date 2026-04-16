@@ -49,7 +49,7 @@ function Admin() {
       setActivities(unwrap(a));
       setGym(unwrap(g));
       setDataQuality(dq.data);
-    } catch (e) {
+    } catch {
       setError("Erreur lors du chargement. Vérifiez le backend (port 8000) et l'authentification JWT.");
     } finally {
       setLoading(false);

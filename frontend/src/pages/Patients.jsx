@@ -1,49 +1,43 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiService } from '../services/api';
 import '../styles/Patients.css';
 
 function Patients() {
   const [patients, setPatients] = useState([]);
-  const [filteredPatients, setFilteredPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const response = await apiService.getPatients();
+        setPatients(response.data.results || response.data);
+        setLoading(false);
+      } catch (err) {
+        setError(err?.code === 'ERR_NETWORK'
+          ? 'Backend indisponible. Lancez Django sur http://localhost:8000.'
+          : 'Erreur au chargement des patients'
+        );
+        setLoading(false);
+      }
+    };
+
     fetchPatients();
   }, []);
 
-  useEffect(() => {
-    filterPatients();
-  }, [searchTerm, patients]);
-
-  const fetchPatients = async () => {
-    try {
-      const response = await apiService.getPatients();
-      setPatients(response.data.results || response.data);
-      setLoading(false);
-    } catch (err) {
-      setError(err?.code === 'ERR_NETWORK'
-        ? 'Backend indisponible. Lancez Django sur http://localhost:8000.'
-        : 'Erreur au chargement des patients'
-      );
-      setLoading(false);
-    }
-  };
-
-  const filterPatients = () => {
+  const filteredPatients = useMemo(() => {
     if (!searchTerm.trim()) {
-      setFilteredPatients(patients);
-      return;
+      return patients;
     }
-    const filtered = patients.filter(p =>
+
+    return patients.filter((p) =>
       p.patient_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.age.toString().includes(searchTerm) ||
       p.gender.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    setFilteredPatients(filtered);
-  };
+  }, [searchTerm, patients]);
 
   if (loading) return <div className="loading">Chargement...</div>;
   if (error) return <div className="error">{error}</div>;

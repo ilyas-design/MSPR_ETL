@@ -48,7 +48,7 @@ function AdminTable({
       }
       await onSaveRow(editRowId, payload);
       cancelEdit();
-    } catch (e) {
+    } catch {
       setSaveError("Impossible d'enregistrer. Vérifiez les valeurs et l'authentification.");
     } finally {
       setSaving(false);

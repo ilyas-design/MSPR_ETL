@@ -13,42 +13,31 @@ function Analytics() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    const fetchAllData = async () => {
+      try {
+        const [eng, conv, sat] = await Promise.all([
+          apiService.getEngagementKPIs(),
+          apiService.getConversionKPIs(),
+          apiService.getSatisfactionKPIs(),
+        ]);
+        setEngagement(eng.data);
+        setConversion(conv.data);
+        setSatisfaction(sat.data);
+        setLoading(false);
+      } catch (err) {
+        setError(err?.code === 'ERR_NETWORK'
+          ? 'Backend indisponible. Lancez Django sur http://localhost:8000.'
+          : 'Erreur au chargement'
+        );
+        setLoading(false);
+      }
+    };
+
     fetchAllData();
   }, []);
 
-  const fetchAllData = async () => {
-    try {
-      const [eng, conv, sat] = await Promise.all([
-        apiService.getEngagementKPIs(),
-        apiService.getConversionKPIs(),
-        apiService.getSatisfactionKPIs(),
-      ]);
-      setEngagement(eng.data);
-      setConversion(conv.data);
-      setSatisfaction(sat.data);
-      setLoading(false);
-    } catch (err) {
-      setError(err?.code === 'ERR_NETWORK'
-        ? 'Backend indisponible. Lancez Django sur http://localhost:8000.'
-        : 'Erreur au chargement'
-      );
-      setLoading(false);
-    }
-  };
-
   if (loading) return <div className="loading">Chargement...</div>;
   if (error) return <div className="error">{error}</div>;
-
-  const engagementData = {
-    labels: ['Patients actifs', 'Patients inactifs'],
-    datasets: [{
-      data: [
-        engagement?.active_patients || 0,
-        (engagement?.total_patients || 0) - (engagement?.active_patients || 0)
-      ],
-      backgroundColor: ['#48bb78', '#cbd5e0'],
-    }],
-  };
 
   return (
     <div className="page">

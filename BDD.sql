@@ -1,3 +1,4 @@
+-- database: :memory:
 -- Schéma SQLite aligné sur l'ETL (`run_pipeline.py` -> `Pipelines/ETLPipeline`)
 -- NB: les tables ETL sont recréées via `to_sql(if_exists="replace")` par défaut.
 

@@ -18,7 +18,7 @@ function Login() {
       await apiService.login(username, password);
       const next = location.state?.next || '/admin';
       navigate(next);
-    } catch (err) {
+    } catch {
       setError("Identifiants invalides ou serveur indisponible.");
     } finally {
       setLoading(false);

@@ -10,26 +10,26 @@ function Dashboard() {
     const [error, setError] = useState(null);
 
     useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [kpi, eng] = await Promise.all([
+                    apiService.getKPIs(),
+                    apiService.getEngagementKPIs(),
+                ]);
+                setKpis(kpi.data);
+                setEngagement(eng.data);
+                setLoading(false);
+            } catch (err) {
+                const hint = (err?.code === "ERR_NETWORK")
+                  ? "Backend indisponible. Lancez Django sur http://localhost:8000 puis rafraîchissez."
+                  : "Erreur lors du chargement des données.";
+                setError(hint);
+                setLoading(false);
+            }
+        };
+
         fetchData();
     }, []);
-
-    const fetchData = async () => {
-        try {
-            const [kpi, eng] = await Promise.all([
-                apiService.getKPIs(),
-                apiService.getEngagementKPIs(),
-            ]);
-            setKpis(kpi.data);
-            setEngagement(eng.data);
-            setLoading(false);
-        } catch (err) {
-            const hint = (err?.code === "ERR_NETWORK")
-              ? "Backend indisponible. Lancez Django sur http://localhost:8000 puis rafraîchissez."
-              : "Erreur lors du chargement des données.";
-            setError(hint);
-            setLoading(false);
-        }
-    };
 
     if (loading) return <div className="loading">Chargement...</div>;
     if (error) return <div className="error">{error}</div>;

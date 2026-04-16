@@ -12,19 +12,19 @@ function Health() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await apiService.getKPIs();
+        setKpis(response.data);
+        setLoading(false);
+      } catch {
+        setError('Erreur au chargement');
+        setLoading(false);
+      }
+    };
+
     fetchData();
   }, []);
-
-  const fetchData = async () => {
-    try {
-      const response = await apiService.getKPIs();
-      setKpis(response.data);
-      setLoading(false);
-    } catch (err) {
-      setError('Erreur au chargement');
-      setLoading(false);
-    }
-  };
 
   if (loading) return <div className="loading">Chargement...</div>;
   if (error) return <div className="error">{error}</div>;
