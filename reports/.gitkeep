@@ -1,0 +1,4 @@
+# Ce fichier garde le dossier `reports/` versionné dans git.
+# Les rapports JSON eux-mêmes sont ignorés (cf. .gitignore racine) car
+# régénérés à chaque exécution de `python run_pipeline.py` ou
+# `python run_monitoring.py`.

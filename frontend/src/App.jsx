@@ -1,4 +1,11 @@
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  NavLink,
+  Link,
+  useNavigate,
+} from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 import Dashboard from './pages/Dashboard';
@@ -11,6 +18,16 @@ import Footer from './components/Footer';
 import Login from './pages/Login';
 import Admin from './pages/Admin';
 import { apiService } from './services/api';
+
+const NAV_LINKS = [
+  { to: '/', label: 'Tableau de bord', end: true },
+  { to: '/patients', label: 'Patients' },
+  { to: '/health', label: 'Santé' },
+  { to: '/nutrition', label: 'Nutrition' },
+  { to: '/activity', label: 'Activité' },
+  { to: '/analytics', label: 'Analytics' },
+  { to: '/admin', label: 'Admin' },
+];
 
 function NavAuth() {
   const navigate = useNavigate();
@@ -48,27 +65,74 @@ function NavAuth() {
   return <div className="nav-actions">{actions}</div>;
 }
 
+function Nav() {
+  const [open, setOpen] = useState(false);
+  const closeMenu = () => setOpen(false);
+
+  return (
+    <nav className="navbar" aria-label="Navigation principale">
+      <div className="nav-container">
+        <Link
+          to="/"
+          className="brand"
+          aria-label="MSPR Dashboard"
+          onClick={closeMenu}
+        >
+          <span className="brand-mark" aria-hidden="true">M</span>
+          <span>
+            <span className="brand-title">MSPR Dashboard</span>
+            <span className="brand-sub">Santé &amp; bien-être</span>
+          </span>
+        </Link>
+
+        <ul
+          id="primary-nav"
+          className={`nav-menu${open ? ' open' : ''}`}
+          role="menubar"
+        >
+          {NAV_LINKS.map((link) => (
+            <li key={link.to} role="none">
+              <NavLink
+                to={link.to}
+                end={link.end}
+                role="menuitem"
+                onClick={closeMenu}
+                className={({ isActive }) => (isActive ? 'active' : undefined)}
+              >
+                {link.label}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+
+        <NavAuth />
+
+        <button
+          type="button"
+          className="nav-toggle"
+          aria-controls="primary-nav"
+          aria-expanded={open}
+          aria-label={open ? 'Fermer le menu' : 'Ouvrir le menu'}
+          onClick={() => setOpen((o) => !o)}
+        >
+          <span className="nav-toggle-bars" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+        </button>
+      </div>
+    </nav>
+  );
+}
+
 function App() {
   return (
     <Router>
-      <div className='app'>
-        <nav className='navbar'>
-          <div className='nav-container'>
-            <h1 className='logo'>MSPR Dashboard</h1>
-            <ul className='nav-menu'>
-              <li><Link to="/">Tableau de bord</Link></li>
-              <li><Link to="/patients">Patients</Link></li>
-              <li><Link to="/health">Santé</Link></li>
-              <li><Link to="/nutrition">Nutrition</Link></li>
-              <li><Link to="/activity">Activité</Link></li>
-              <li><Link to="/analytics">Analytics</Link></li>
-              <li><Link to="/admin">Admin</Link></li>
-            </ul>
-            <NavAuth />
-          </div>
-        </nav>
+      <div className="app">
+        <Nav />
 
-        <main className='main-content'>
+        <main className="main-content">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/health" element={<Health />} />
@@ -88,4 +152,3 @@ function App() {
 }
 
 export default App;
-

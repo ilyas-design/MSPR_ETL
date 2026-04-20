@@ -420,34 +420,146 @@ class ETLPipeline:
     # =========================================================================
     # ÉTAPE 5: CHARGEMENT
     # =========================================================================
-    
-    def load(self, if_exists: str = "replace") -> bool:
+
+    # Chemin vers le schéma SQL versionné (source de vérité).
+    SCHEMA_FILE = Path(__file__).resolve().parent.parent / "BDD.sql"
+
+    # Ordre inverse des dépendances FK : on vide les enfants avant les parents.
+    _DELETE_ORDER: Tuple[str, ...] = (
+        "exercise",
+        "food_log",
+        "gym_session",
+        "activite_physique",
+        "nutrition",
+        "sante",
+        "patient",
+    )
+
+    def _ensure_schema(self, conn: sqlite3.Connection) -> None:
         """
-        Charge les données dans SQLite
-        
-        Args:
-            if_exists: Comportement si la table existe ('replace', 'append', 'fail')
-        
+        Applique le schéma versionné (``BDD.sql``) de façon idempotente.
+
+        Utilise ``CREATE TABLE IF NOT EXISTS`` donc n'écrase jamais les données
+        existantes ; crée aussi la table ``etl_run`` et les index analytiques.
+        """
+        if self.SCHEMA_FILE.exists():
+            schema_sql = self.SCHEMA_FILE.read_text(encoding="utf-8")
+            conn.executescript(schema_sql)
+
+    def _existing_tables(self, conn: sqlite3.Connection) -> set:
+        cur = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+        return {row[0] for row in cur.fetchall()}
+
+    def _record_run(
+        self,
+        conn: sqlite3.Connection,
+        started_at: datetime,
+        finished_at: datetime,
+        rows_per_table: Dict[str, int],
+        status: str,
+        notes: Optional[str] = None,
+    ) -> None:
+        """Insère une ligne de métadonnées dans ``etl_run``."""
+        if "etl_run" not in self._existing_tables(conn):
+            return
+
+        error_count = sum(
+            r.error_count for r in self.validation_reports.values()
+        )
+        warning_count = sum(
+            r.warning_count for r in self.validation_reports.values()
+        )
+
+        conn.execute(
+            """
+            INSERT INTO etl_run (
+                started_at, finished_at, duration_seconds, status,
+                tables_loaded, total_rows, error_count, warning_count, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                started_at.isoformat(timespec="seconds"),
+                finished_at.isoformat(timespec="seconds"),
+                (finished_at - started_at).total_seconds(),
+                status,
+                json.dumps(rows_per_table, sort_keys=True),
+                sum(rows_per_table.values()),
+                error_count,
+                warning_count,
+                notes,
+            ),
+        )
+        conn.commit()
+
+    def load(self, if_exists: str = "append") -> bool:  # noqa: ARG002 (legacy param kept for compat)
+        """
+        Charge les données dans SQLite.
+
+        Stratégie versionnée (à la place du ``to_sql(replace)`` d'origine) :
+
+        1. Applique ``BDD.sql`` via ``executescript`` — crée tables, FK et
+           index si absents. Idempotent.
+        2. ``DELETE FROM`` chaque table en ordre inverse des FK.
+        3. ``to_sql(if_exists="append")`` — préserve schéma, contraintes,
+           index et auto-incréments.
+        4. Insère une ligne dans ``etl_run`` avec durée, status et volumes.
+
+        Le paramètre ``if_exists`` est conservé pour compatibilité ascendante
+        mais ignoré : le nouveau comportement est toujours ``append`` après
+        purge contrôlée.
+
         Returns:
-            True si succès
+            True si le chargement a réussi.
         """
         print("\n" + "="*60)
         print("ETAPE 5: CHARGEMENT")
         print("="*60)
-        
+
+        started_at = datetime.now()
+        rows_per_table: Dict[str, int] = {}
+
         try:
             conn = sqlite3.connect(self.db_path)
-            
-            for table_name, df in self.transformed_data.items():
-                df.to_sql(table_name, conn, if_exists=if_exists, index=False)
-                self.log_operation(
-                    "LOAD",
-                    f"Table {table_name}: {len(df)} lignes chargées dans {self.db_path}"
+            try:
+                # 1. Schéma versionné (idempotent).
+                self._ensure_schema(conn)
+
+                # Bulk load : on désactive le contrôle FK pour la durée de la
+                # session. Les contraintes restent déclarées dans le schéma
+                # (documentaires + utilisées par l'API Django à sa connexion).
+                conn.execute("PRAGMA foreign_keys = OFF")
+
+                # 2. Purge en ordre inverse des FK.
+                existing = self._existing_tables(conn)
+                for table_name in self._DELETE_ORDER:
+                    if table_name in existing and table_name in self.transformed_data:
+                        conn.execute(f"DELETE FROM {table_name}")
+                conn.commit()
+
+                # 3. Append en ordre d'insertion (parents avant enfants).
+                for table_name, df in self.transformed_data.items():
+                    df.to_sql(table_name, conn, if_exists="append", index=False)
+                    rows_per_table[table_name] = len(df)
+                    self.log_operation(
+                        "LOAD",
+                        f"Table {table_name}: {len(df)} lignes chargées dans {self.db_path}",
+                    )
+
+                # 4. Métadonnées de run.
+                finished_at = datetime.now()
+                has_errors = any(
+                    r.error_count > 0 for r in self.validation_reports.values()
                 )
-            
-            conn.close()
+                status = "WARNING" if has_errors else "SUCCESS"
+                self._record_run(
+                    conn, started_at, finished_at, rows_per_table, status
+                )
+            finally:
+                conn.close()
             return True
-        
+
         except Exception as e:
             self.log_operation("LOAD", f"Erreur: {str(e)}", "ERROR")
             return False

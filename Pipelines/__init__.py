@@ -75,6 +75,15 @@ from .pipeline import (
     run_etl
 )
 
+from .monitoring import (
+    MonitoringThresholds,
+    load_reports,
+    evaluate_report,
+    build_monitoring_snapshot,
+    save_monitoring_snapshot,
+    print_monitoring_summary,
+)
+
 __all__ = [
     # Règles
     "PATIENT_RULES",
@@ -108,7 +117,15 @@ __all__ = [
     
     # Pipeline
     "ETLPipeline",
-    "run_etl"
+    "run_etl",
+
+    # Monitoring
+    "MonitoringThresholds",
+    "load_reports",
+    "evaluate_report",
+    "build_monitoring_snapshot",
+    "save_monitoring_snapshot",
+    "print_monitoring_summary",
 ]
 
 __version__ = "1.0.0"

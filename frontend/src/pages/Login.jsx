@@ -19,7 +19,7 @@ function Login() {
       const next = location.state?.next || '/admin';
       navigate(next);
     } catch {
-      setError("Identifiants invalides ou serveur indisponible.");
+      setError('Identifiants invalides ou serveur indisponible.');
     } finally {
       setLoading(false);
     }
@@ -30,18 +30,25 @@ function Login() {
       <div className="auth-shell">
         <div className="auth-card" role="region" aria-label="Connexion">
           <div className="auth-header">
-            <h2>Connexion</h2>
-            <p>Accès requis pour corriger des anomalies et exporter les données.</p>
+            <span className="page-eyebrow">Connexion</span>
+            <h2>Bon retour 👋</h2>
+            <p>
+              Accédez à l'espace d'administration pour corriger des anomalies et
+              exporter les données.
+            </p>
           </div>
 
-          <form onSubmit={onSubmit} className="form">
+          <form onSubmit={onSubmit} className="form" noValidate>
             <div className="field">
-              <label className="label" htmlFor="username">Nom d'utilisateur</label>
+              <label className="label" htmlFor="username">
+                Nom d'utilisateur
+              </label>
               <input
                 id="username"
                 className="input"
                 type="text"
                 autoComplete="username"
+                placeholder="ex: admin"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -49,28 +56,39 @@ function Login() {
             </div>
 
             <div className="field">
-              <label className="label" htmlFor="password">Mot de passe</label>
+              <label className="label" htmlFor="password">
+                Mot de passe
+              </label>
               <input
                 id="password"
                 className="input"
                 type="password"
                 autoComplete="current-password"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
 
-            {error ? <div className="error" role="alert">{error}</div> : null}
+            {error ? (
+              <div className="error" role="alert">
+                {error}
+              </div>
+            ) : null}
 
-            <button className="btn btn-primary btn-block" type="submit" disabled={loading}>
+            <button
+              className="btn btn-primary btn-block"
+              type="submit"
+              disabled={loading}
+            >
               {loading ? 'Connexion...' : 'Se connecter'}
             </button>
           </form>
 
           <div className="auth-footnote">
             <span className="muted">
-              Utilisez un compte Django (ex: superuser) configuré côté backend.
+              Utilisez un compte Django (ex : superuser) configuré côté backend.
             </span>
           </div>
         </div>
@@ -80,4 +98,3 @@ function Login() {
 }
 
 export default Login;
-

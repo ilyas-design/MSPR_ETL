@@ -349,6 +349,165 @@ class TestCoveragePush(unittest.TestCase):
         # cover run_etl() helper
         _ = run_etl(data_dir=str(tmp), db_path=str(tmp / "dhelper.sqlite"), report_dir=str(tmp / "rhelper"))
 
+    def test_load_schema_init_and_etl_run_tracking(self):
+        """
+        Le nouveau ``load()`` applique ``BDD.sql`` puis ``DELETE + append``
+        de façon idempotente, et trace chaque run dans la table ``etl_run``.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            db_path = tmp / "schema.db"
+            pipeline = ETLPipeline(
+                data_dir=str(tmp),
+                db_path=str(db_path),
+                report_dir=str(tmp / "reports"),
+            )
+            pipeline.transformed_data = {
+                "patient": pd.DataFrame(
+                    {
+                        "patient_id": ["P00001", "P00002"],
+                        "age": [30, 45],
+                        "gender": ["Male", "Female"],
+                        "weight_kg": [80.0, 65.0],
+                        "height_cm": [180.0, 165.0],
+                        "bmi_calculated": [24.7, 23.9],
+                        "bmi_category": ["Normal", "Normal"],
+                        "age_group": ["Adulte", "Adulte"],
+                    }
+                )
+            }
+
+            # Premier run : schéma appliqué, 2 patients insérés, 1 ligne etl_run.
+            self.assertTrue(pipeline.load())
+
+            conn = sqlite3.connect(db_path)
+            tables = {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )}
+            self.assertIn("patient", tables)
+            self.assertIn("etl_run", tables)
+            self.assertIn("sante", tables)  # créée via BDD.sql même si vide
+
+            patient_count = conn.execute(
+                "SELECT COUNT(*) FROM patient"
+            ).fetchone()[0]
+            self.assertEqual(patient_count, 2)
+
+            run_count = conn.execute(
+                "SELECT COUNT(*) FROM etl_run"
+            ).fetchone()[0]
+            self.assertEqual(run_count, 1)
+
+            # Vérifie que le statut et les compteurs sont bien enregistrés.
+            row = conn.execute(
+                "SELECT status, total_rows, tables_loaded FROM etl_run"
+            ).fetchone()
+            self.assertEqual(row[0], "SUCCESS")
+            self.assertEqual(row[1], 2)
+            loaded = json.loads(row[2])
+            self.assertEqual(loaded["patient"], 2)
+
+            # Vérifie la présence des index analytiques.
+            indexes = {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='index'"
+            )}
+            self.assertIn("idx_patient_bmi_category", indexes)
+            self.assertIn("idx_etl_run_started", indexes)
+            conn.close()
+
+            # Second run : idempotence — toujours 2 patients, mais 2 runs tracés.
+            self.assertTrue(pipeline.load())
+            conn = sqlite3.connect(db_path)
+            self.assertEqual(
+                conn.execute("SELECT COUNT(*) FROM patient").fetchone()[0], 2
+            )
+            self.assertEqual(
+                conn.execute("SELECT COUNT(*) FROM etl_run").fetchone()[0], 2
+            )
+            conn.close()
+
+    def test_load_schema_file_missing_branch(self):
+        """Si ``BDD.sql`` est absent, ``load`` crée les tables via ``to_sql``."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            pipeline = ETLPipeline(
+                data_dir=str(tmp),
+                db_path=str(tmp / "noschema.db"),
+                report_dir=str(tmp / "r"),
+            )
+            pipeline.SCHEMA_FILE = tmp / "nonexistent.sql"
+            pipeline.transformed_data = {
+                "custom_table": pd.DataFrame({"a": [1, 2]})
+            }
+            self.assertTrue(pipeline.load())
+
+            conn = sqlite3.connect(pipeline.db_path)
+            rows = conn.execute("SELECT COUNT(*) FROM custom_table").fetchone()
+            self.assertEqual(rows[0], 2)
+            # Pas d'etl_run puisque BDD.sql n'a pas été appliqué.
+            tables = {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )}
+            self.assertNotIn("etl_run", tables)
+            conn.close()
+
+    def test_load_status_warning_on_validation_errors(self):
+        """Le statut etl_run passe à ``WARNING`` quand la validation remonte des erreurs."""
+        from Pipelines.validators import (
+            ValidationReport,
+            ValidationResult,
+            ValidationSeverity,
+        )
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            pipeline = ETLPipeline(
+                data_dir=str(tmp),
+                db_path=str(tmp / "warn.db"),
+                report_dir=str(tmp / "r"),
+            )
+            pipeline.transformed_data = {
+                "patient": pd.DataFrame(
+                    {
+                        "patient_id": ["P00001"],
+                        "age": [30],
+                        "gender": ["Male"],
+                        "weight_kg": [80.0],
+                        "height_cm": [180.0],
+                        "bmi_calculated": [24.7],
+                        "bmi_category": ["Normal"],
+                        "age_group": ["Adulte"],
+                    }
+                )
+            }
+            fake_report = ValidationReport(
+                table_name="patient",
+                total_rows=1,
+                valid_rows=0,
+                invalid_rows=1,
+            )
+            fake_report.errors.append(
+                ValidationResult(
+                    is_valid=False,
+                    field="patient_id",
+                    value="P00001",
+                    rule="fake",
+                    message="boom",
+                    severity=ValidationSeverity.ERROR,
+                )
+            )
+            pipeline.validation_reports = {"patient": fake_report}
+
+            self.assertTrue(pipeline.load())
+
+            conn = sqlite3.connect(pipeline.db_path)
+            status, errors = conn.execute(
+                "SELECT status, error_count FROM etl_run ORDER BY run_id DESC LIMIT 1"
+            ).fetchone()
+            conn.close()
+            self.assertEqual(status, "WARNING")
+            self.assertEqual(errors, 1)
+
     def test_metrics_remaining_branches(self):
         # cover ColumnStats.to_dict branches (numeric + top_values)
         cs = ColumnStats(

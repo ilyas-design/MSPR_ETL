@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiService } from '../services/api';
-import '../styles/Patients.css';
+
+function getInitial(id) {
+  if (!id) return '?';
+  const trimmed = String(id).trim();
+  return trimmed[0]?.toUpperCase() || '?';
+}
 
 function Patients() {
   const [patients, setPatients] = useState([]);
@@ -13,12 +18,14 @@ function Patients() {
     const fetchPatients = async () => {
       try {
         const response = await apiService.getPatients();
-        setPatients(response.data.results || response.data);
+        const list = response.data.results || response.data || [];
+        setPatients(list);
         setLoading(false);
       } catch (err) {
-        setError(err?.code === 'ERR_NETWORK'
-          ? 'Backend indisponible. Lancez Django sur http://localhost:8000.'
-          : 'Erreur au chargement des patients'
+        setError(
+          err?.code === 'ERR_NETWORK'
+            ? 'Backend indisponible. Lancez Django sur http://localhost:8000.'
+            : 'Erreur au chargement des patients'
         );
         setLoading(false);
       }
@@ -28,67 +35,98 @@ function Patients() {
   }, []);
 
   const filteredPatients = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return patients;
-    }
-
-    return patients.filter((p) =>
-      p.patient_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.age.toString().includes(searchTerm) ||
-      p.gender.toLowerCase().includes(searchTerm.toLowerCase())
+    if (!searchTerm.trim()) return patients;
+    const q = searchTerm.toLowerCase();
+    return patients.filter(
+      (p) =>
+        String(p.patient_id).toLowerCase().includes(q) ||
+        String(p.age).includes(q) ||
+        String(p.gender).toLowerCase().includes(q)
     );
   }, [searchTerm, patients]);
 
-  if (loading) return <div className="loading">Chargement...</div>;
+  if (loading) return <div className="loading">Chargement des patients</div>;
   if (error) return <div className="error">{error}</div>;
 
   return (
     <div className="page">
-      <h2>Patients</h2>
-      
+      <header className="page-header">
+        <div>
+          <div className="page-title-row">
+            <span className="page-eyebrow">Patients</span>
+          </div>
+          <h2>Annuaire des patients</h2>
+          <p className="page-subtitle">
+            Parcourez la liste complète, recherchez un patient et consultez
+            rapidement ses indicateurs morphologiques.
+          </p>
+        </div>
+      </header>
+
       <div className="patients-container">
-        <div className="patients-list">
+        <aside className="patients-list">
           <h3>Liste des patients ({filteredPatients.length})</h3>
-          
+
           <div className="search-box">
             <input
-              type="text"
-              placeholder="Chercher par ID, âge..."
+              type="search"
+              placeholder="Rechercher par ID, âge, genre..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="search-input"
+              aria-label="Rechercher un patient"
             />
-            <span className="search-icon">🔍</span>
+            <span className="search-icon" aria-hidden="true">
+              🔍
+            </span>
           </div>
 
           <div className="patient-items">
             {filteredPatients.length > 0 ? (
-              filteredPatients.map((patient) => (
-                <div
-                  key={patient.patient_id}
-                  className={`patient-item ${selectedPatient?.patient_id === patient.patient_id ? 'active' : ''}`}
-                  onClick={() => setSelectedPatient(patient)}
-                >
-                  <div className="patient-avatar">{patient.patient_id[0]}</div>
-                  <div className="patient-info">
-                    <h4>{patient.patient_id}</h4>
-                    <p>{patient.age} ans • {patient.gender}</p>
-                  </div>
-                </div>
-              ))
+              filteredPatients.map((patient) => {
+                const active =
+                  selectedPatient?.patient_id === patient.patient_id;
+                return (
+                  <button
+                    type="button"
+                    key={patient.patient_id}
+                    className={`patient-item ${active ? 'active' : ''}`}
+                    onClick={() => setSelectedPatient(patient)}
+                    aria-pressed={active}
+                  >
+                    <span className="patient-avatar">
+                      {getInitial(patient.patient_id)}
+                    </span>
+                    <span className="patient-info">
+                      <h4>{patient.patient_id}</h4>
+                      <p>
+                        {patient.age} ans &bull; {patient.gender}
+                      </p>
+                    </span>
+                  </button>
+                );
+              })
             ) : (
-              <p style={{textAlign: 'center', color: '#a0aec0', padding: '1rem'}}>Aucun patient trouvé</p>
+              <p
+                style={{
+                  textAlign: 'center',
+                  color: 'var(--muted)',
+                  padding: '1rem',
+                }}
+              >
+                Aucun patient trouvé
+              </p>
             )}
           </div>
-        </div>
+        </aside>
 
-        <div className="patient-details">
+        <section className="patient-details">
           {selectedPatient ? (
             <>
               <h3>Détails du patient</h3>
               <div className="details-card">
                 <div className="detail-row">
-                  <span>ID Patient</span>
+                  <span>ID patient</span>
                   <strong>{selectedPatient.patient_id}</strong>
                 </div>
                 <div className="detail-row">
@@ -104,21 +142,23 @@ function Patients() {
                   <strong>{selectedPatient.weight_kg} kg</strong>
                 </div>
                 <div className="detail-row">
-                  <span>Hauteur</span>
+                  <span>Taille</span>
                   <strong>{selectedPatient.height_cm} cm</strong>
                 </div>
                 <div className="detail-row">
                   <span>IMC calculé</span>
-                  <strong>{parseFloat(selectedPatient.bmi_calculated).toFixed(2)}</strong>
+                  <strong>
+                    {parseFloat(selectedPatient.bmi_calculated).toFixed(2)}
+                  </strong>
                 </div>
               </div>
             </>
           ) : (
             <div className="empty-state">
-              <p>Sélectionnez un patient pour voir les détails</p>
+              <p>Sélectionnez un patient pour afficher ses détails.</p>
             </div>
           )}
-        </div>
+        </section>
       </div>
     </div>
   );

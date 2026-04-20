@@ -1,10 +1,17 @@
 function Footer() {
   const currentYear = new Date().getFullYear();
-  
+
   return (
-    <footer className="footer">
+    <footer className="footer" role="contentinfo">
       <div className="footer-content">
-        <p>&copy; {currentYear} MSPR Dashboard. Tous droits réservés.</p>
+        <div className="footer-brand">
+          <span className="brand-mark" aria-hidden="true">M</span>
+          <span>MSPR Dashboard</span>
+        </div>
+        <p>
+          &copy; {currentYear} MSPR Dashboard — Suivi santé, nutrition et activité
+          physique des patients.
+        </p>
         <div className="footer-links">
           <a href="#privacy">Confidentialité</a>
           <a href="#terms">Conditions</a>
