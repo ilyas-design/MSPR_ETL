@@ -534,6 +534,83 @@ class TestCoveragePush(unittest.TestCase):
         ts = TableStats(table_name="t", row_count=0, column_count=0, memory_usage_mb=0.0, columns_stats=[cs])
         self.assertIn("columns", ts.to_dict())
 
+    # ------------------------------------------------------------------
+    # _reconcile_foreign_keys : couverture complète des branches
+    # ------------------------------------------------------------------
+
+    def _make_pipeline(self):
+        p = ETLPipeline(data_dir="./Data", db_path=":memory:")
+        p.transformed_data = {}
+        p.operations_log = []
+        return p
+
+    def test_reconcile_fk_no_patient_is_noop(self):
+        """Sans table `patient`, la réconciliation ne fait rien."""
+        p = self._make_pipeline()
+        p.transformed_data["gym_session"] = pd.DataFrame(
+            {"patient_id": ["P0001", "P0002"]}
+        )
+        result = p._reconcile_foreign_keys()
+        self.assertEqual(result, {})
+        # Et les données enfants ne sont pas modifiées.
+        self.assertEqual(len(p.transformed_data["gym_session"]), 2)
+
+    def test_reconcile_fk_drops_orphans_and_realigns_width(self):
+        """Les enfants au format P00001 sont ré-alignés sur P0001, et les
+        vrais orphelins (>N) sont supprimés."""
+        p = self._make_pipeline()
+        p.transformed_data["patient"] = pd.DataFrame(
+            {"patient_id": ["P0001", "P0002", "P0003"]}
+        )
+        # 5 sessions dont 2 orphelines (P0004 et P0005 n'existent pas),
+        # et 3 valides mais au format large → doivent être re-padées à 4.
+        p.transformed_data["gym_session"] = pd.DataFrame(
+            {
+                "patient_id": ["P00001", "P00002", "P00003", "P00004", "P00005"],
+                "val": [1, 2, 3, 4, 5],
+            }
+        )
+        result = p._reconcile_foreign_keys()
+        self.assertEqual(result.get("gym_session"), 2)
+        kept = p.transformed_data["gym_session"]
+        self.assertEqual(len(kept), 3)
+        self.assertListEqual(
+            sorted(kept["patient_id"].tolist()),
+            ["P0001", "P0002", "P0003"],
+        )
+
+    def test_reconcile_fk_mixed_patient_widths_skip_realign(self):
+        """Quand la largeur canonique des patients n'est pas unique, aucun
+        ré-alignement n'est tenté (couvre la branche `canonical_digits is None`)
+        et seules les lignes strictement orphelines sont supprimées."""
+        p = self._make_pipeline()
+        p.transformed_data["patient"] = pd.DataFrame(
+            {"patient_id": ["P0001", "P00002"]}  # largeurs différentes
+        )
+        p.transformed_data["sante"] = pd.DataFrame(
+            {"patient_id": ["P0001", "P00002", "P9999"], "v": [1, 2, 3]}
+        )
+        result = p._reconcile_foreign_keys()
+        self.assertEqual(result.get("sante"), 1)
+        self.assertSetEqual(
+            set(p.transformed_data["sante"]["patient_id"].tolist()),
+            {"P0001", "P00002"},
+        )
+
+    def test_reconcile_fk_non_matching_format_is_left_alone(self):
+        """Les patient_id qui ne respectent pas le pattern P+chiffres sont
+        laissés tels quels par _realign (couvre le early-return de la closure)
+        puis supprimés comme orphelins."""
+        p = self._make_pipeline()
+        p.transformed_data["patient"] = pd.DataFrame({"patient_id": ["P0001"]})
+        p.transformed_data["nutrition"] = pd.DataFrame(
+            {"patient_id": ["P0001", "XYZ42", "P_BAD"], "v": [1, 2, 3]}
+        )
+        result = p._reconcile_foreign_keys()
+        self.assertEqual(result.get("nutrition"), 2)
+        kept = p.transformed_data["nutrition"]
+        self.assertListEqual(kept["patient_id"].tolist(), ["P0001"])
+
 
 if __name__ == "__main__":
     unittest.main()

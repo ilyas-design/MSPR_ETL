@@ -17,6 +17,7 @@ import Patients from './pages/Patients';
 import Footer from './components/Footer';
 import Login from './pages/Login';
 import Admin from './pages/Admin';
+import AccessibilityDeclaration from './pages/AccessibilityDeclaration';
 import { apiService } from './services/api';
 
 const NAV_LINKS = [
@@ -88,14 +89,12 @@ function Nav() {
         <ul
           id="primary-nav"
           className={`nav-menu${open ? ' open' : ''}`}
-          role="menubar"
         >
           {NAV_LINKS.map((link) => (
-            <li key={link.to} role="none">
+            <li key={link.to}>
               <NavLink
                 to={link.to}
                 end={link.end}
-                role="menuitem"
                 onClick={closeMenu}
                 className={({ isActive }) => (isActive ? 'active' : undefined)}
               >
@@ -130,9 +129,13 @@ function App() {
   return (
     <Router>
       <div className="app">
+        <a href="#main-content" className="skip-link">
+          Aller au contenu principal
+        </a>
+
         <Nav />
 
-        <main className="main-content">
+        <main id="main-content" className="main-content" tabIndex="-1">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/health" element={<Health />} />
@@ -142,6 +145,7 @@ function App() {
             <Route path="/patients" element={<Patients />} />
             <Route path="/login" element={<Login />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/accessibilite" element={<AccessibilityDeclaration />} />
           </Routes>
         </main>
 

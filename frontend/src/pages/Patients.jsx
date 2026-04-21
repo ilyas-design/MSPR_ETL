@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiService } from '../services/api';
+import { usePageTitle } from '../utils/usePageTitle';
 
 function getInitial(id) {
   if (!id) return '?';
@@ -8,6 +9,7 @@ function getInitial(id) {
 }
 
 function Patients() {
+  usePageTitle('Annuaire des patients');
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -55,7 +57,7 @@ function Patients() {
           <div className="page-title-row">
             <span className="page-eyebrow">Patients</span>
           </div>
-          <h2>Annuaire des patients</h2>
+          <h1>Annuaire des patients</h1>
           <p className="page-subtitle">
             Parcourez la liste complète, recherchez un patient et consultez
             rapidement ses indicateurs morphologiques.
@@ -64,8 +66,8 @@ function Patients() {
       </header>
 
       <div className="patients-container">
-        <aside className="patients-list">
-          <h3>Liste des patients ({filteredPatients.length})</h3>
+        <aside className="patients-list" aria-labelledby="patients-list-title">
+          <h2 id="patients-list-title">Liste des patients ({filteredPatients.length})</h2>
 
           <div className="search-box">
             <input
@@ -98,10 +100,10 @@ function Patients() {
                       {getInitial(patient.patient_id)}
                     </span>
                     <span className="patient-info">
-                      <h4>{patient.patient_id}</h4>
-                      <p>
+                      <span className="patient-id">{patient.patient_id}</span>
+                      <span className="patient-meta">
                         {patient.age} ans &bull; {patient.gender}
-                      </p>
+                      </span>
                     </span>
                   </button>
                 );
@@ -120,10 +122,10 @@ function Patients() {
           </div>
         </aside>
 
-        <section className="patient-details">
+        <section className="patient-details" aria-labelledby="patient-details-title">
           {selectedPatient ? (
             <>
-              <h3>Détails du patient</h3>
+              <h2 id="patient-details-title">Détails du patient</h2>
               <div className="details-card">
                 <div className="detail-row">
                   <span>ID patient</span>

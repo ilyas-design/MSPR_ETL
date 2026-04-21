@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminTable from '../components/AdminTable';
 import ExportButtons from '../components/ExportButtons';
+import PendingChangesTable from '../components/PendingChangesTable';
 import { apiService } from '../services/api';
+import { usePageTitle } from '../utils/usePageTitle';
 
 function Admin() {
+  usePageTitle('Administration');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -15,33 +18,39 @@ function Admin() {
   const [activities, setActivities] = useState([]);
   const [gym, setGym] = useState([]);
 
+  const [me, setMe] = useState(null);
+  const [pendingChanges, setPendingChanges] = useState([]);
+  const [flash, setFlash] = useState(null);
+
   const [dataQuality, setDataQuality] = useState(null);
   const [activeTab, setActiveTab] = useState('quality');
 
   const isAuthed = apiService.isAuthenticated();
-
-  useEffect(() => {
-    if (!isAuthed) {
-      navigate('/login', { state: { next: '/admin' } });
-      return;
-    }
-    fetchAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthed]);
+  const isSupervisor = !!me?.is_supervisor;
 
   const unwrap = (resp) => resp?.data?.results || resp?.data || [];
 
-  const fetchAll = async () => {
+  const fetchPending = useCallback(async () => {
+    try {
+      const resp = await apiService.getPendingChanges();
+      setPendingChanges(unwrap(resp));
+    } catch {
+      // silencieux : l'onglet gère son propre état vide
+    }
+  }, []);
+
+  const fetchAll = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
-      const [p, h, n, a, g, dq] = await Promise.all([
+      const [p, h, n, a, g, dq, meResp] = await Promise.all([
         apiService.getPatients(),
         apiService.getHealthData(),
         apiService.getNutrition(),
         apiService.getActivities(),
         apiService.getGymSessions(),
         apiService.getDataQualityKPIs(),
+        apiService.getMe().catch(() => null),
       ]);
       setPatients(unwrap(p));
       setHealth(unwrap(h));
@@ -49,6 +58,8 @@ function Admin() {
       setActivities(unwrap(a));
       setGym(unwrap(g));
       setDataQuality(dq.data);
+      setMe(meResp?.data || null);
+      await fetchPending();
     } catch {
       setError(
         "Erreur lors du chargement. Vérifiez le backend (port 8000) et l'authentification JWT."
@@ -56,19 +67,59 @@ function Admin() {
     } finally {
       setLoading(false);
     }
+  }, [fetchPending]);
+
+  useEffect(() => {
+    if (!isAuthed) {
+      navigate('/login', { state: { next: '/admin' } });
+      return;
+    }
+    fetchAll();
+  }, [isAuthed, navigate, fetchAll]);
+
+  useEffect(() => {
+    if (!flash) return undefined;
+    const t = setTimeout(() => setFlash(null), 5000);
+    return () => clearTimeout(t);
+  }, [flash]);
+
+  const showFlash = (level, message) => setFlash({ level, message });
+
+  /**
+   * Wrapper d'édition qui gère le retour 202 (modification en attente)
+   * et affiche le message adapté selon le rôle de l'utilisateur.
+   */
+  const wrapSave = (apiCall, successMsg) => async (id, payload) => {
+    const resp = await apiCall(id, payload);
+    if (resp?.status === 202) {
+      showFlash(
+        'info',
+        'Modification enregistrée et soumise à validation. Un superviseur doit l\u2019approuver.'
+      );
+      await fetchPending();
+      setActiveTab('approvals');
+    } else {
+      showFlash('success', successMsg || 'Modification appliquée.');
+      await fetchAll();
+    }
   };
 
-  const tabs = useMemo(
-    () => [
+  const tabs = useMemo(() => {
+    const base = [
       { id: 'quality', label: 'Qualité des données' },
       { id: 'patients', label: 'Patients' },
       { id: 'health', label: 'Santé' },
       { id: 'nutrition', label: 'Nutrition' },
       { id: 'activities', label: 'Activité physique' },
       { id: 'gym', label: 'Séances gym' },
-    ],
-    []
-  );
+    ];
+    const pendingCount = pendingChanges.filter((p) => p.status === 'pending').length;
+    const label = pendingCount
+      ? `Demandes d'approbation (${pendingCount})`
+      : 'Demandes d\u2019approbation';
+    base.push({ id: 'approvals', label });
+    return base;
+  }, [pendingChanges]);
 
   const qualityCards = useMemo(() => {
     const dq = dataQuality || {};
@@ -78,21 +129,9 @@ function Admin() {
         value: dq.overall_data_quality ?? dq.quality_score ?? 0,
         suffix: '%',
       },
-      {
-        label: 'Complétude santé',
-        value: dq.completeness_sante ?? 0,
-        suffix: '%',
-      },
-      {
-        label: 'Complétude nutrition',
-        value: dq.completeness_nutrition ?? 0,
-        suffix: '%',
-      },
-      {
-        label: 'Complétude activité',
-        value: dq.completeness_activity ?? 0,
-        suffix: '%',
-      },
+      { label: 'Complétude santé', value: dq.completeness_sante ?? 0, suffix: '%' },
+      { label: 'Complétude nutrition', value: dq.completeness_nutrition ?? 0, suffix: '%' },
+      { label: 'Complétude activité', value: dq.completeness_activity ?? 0, suffix: '%' },
     ];
   }, [dataQuality]);
 
@@ -105,11 +144,26 @@ function Admin() {
         <div>
           <div className="page-title-row">
             <span className="page-eyebrow">Administration</span>
+            {me ? (
+              <span
+                className={`role-badge ${isSupervisor ? 'role-badge--super' : 'role-badge--admin'}`}
+                aria-label={
+                  isSupervisor
+                    ? `Utilisateur connecté ${me.username}, rôle superviseur`
+                    : `Utilisateur connecté ${me.username}, rôle administrateur standard`
+                }
+              >
+                {me.username} · {isSupervisor ? 'Superviseur' : 'Admin'}
+              </span>
+            ) : null}
           </div>
-          <h2 className="admin-title">Console d'administration</h2>
+          <h1 className="admin-title">Console d&apos;administration</h1>
           <p className="admin-subtitle">
             Surveillez la qualité, corrigez les anomalies et exportez les
             données nettoyées.
+            {!isSupervisor
+              ? ' Vos modifications sont soumises au workflow de validation.'
+              : ''}
           </p>
         </div>
         <div className="admin-head-actions">
@@ -124,27 +178,37 @@ function Admin() {
         </div>
       </header>
 
-      <div className="tabs" role="tablist" aria-label="Admin">
+      {flash ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`flash flash-${flash.level}`}
+        >
+          {flash.message}
+        </div>
+      ) : null}
+
+      <nav className="tabs" aria-label="Sections d'administration">
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
-            role="tab"
-            aria-selected={activeTab === t.id}
+            aria-pressed={activeTab === t.id}
+            aria-current={activeTab === t.id ? 'page' : undefined}
             className={`tab ${activeTab === t.id ? 'active' : ''}`}
             onClick={() => setActiveTab(t.id)}
           >
             {t.label}
           </button>
         ))}
-      </div>
+      </nav>
 
       {activeTab === 'quality' ? (
-        <>
+        <section aria-label="Qualité des données">
           <div className="kpi-grid">
             {qualityCards.map((c) => (
               <div className="kpi-card" key={c.label}>
-                <h3>{c.label}</h3>
+                <h2>{c.label}</h2>
                 <div className="kpi-value">
                   {c.value}
                   {c.suffix || ''}
@@ -154,10 +218,10 @@ function Admin() {
             ))}
           </div>
 
-          <section className="panel">
+          <section className="panel" aria-labelledby="export-title">
             <div className="panel-head">
               <div>
-                <h3 className="panel-title">Export global</h3>
+                <h2 id="export-title" className="panel-title">Export global</h2>
                 <p className="panel-hint">
                   Exportez les données affichées (API) en CSV ou JSON.
                 </p>
@@ -166,10 +230,7 @@ function Admin() {
             <div className="export-grid">
               <div className="export-card">
                 <div className="export-title">👥 Patients</div>
-                <ExportButtons
-                  filenamePrefix="patients_cleaned"
-                  rows={patients}
-                />
+                <ExportButtons filenamePrefix="patients_cleaned" rows={patients} />
               </div>
               <div className="export-card">
                 <div className="export-title">❤️ Santé</div>
@@ -177,28 +238,19 @@ function Admin() {
               </div>
               <div className="export-card">
                 <div className="export-title">🍎 Nutrition</div>
-                <ExportButtons
-                  filenamePrefix="nutrition_cleaned"
-                  rows={nutrition}
-                />
+                <ExportButtons filenamePrefix="nutrition_cleaned" rows={nutrition} />
               </div>
               <div className="export-card">
                 <div className="export-title">🏃 Activité</div>
-                <ExportButtons
-                  filenamePrefix="activite_physique_cleaned"
-                  rows={activities}
-                />
+                <ExportButtons filenamePrefix="activite_physique_cleaned" rows={activities} />
               </div>
               <div className="export-card">
                 <div className="export-title">🏋️ Gym</div>
-                <ExportButtons
-                  filenamePrefix="gym_sessions_cleaned"
-                  rows={gym}
-                />
+                <ExportButtons filenamePrefix="gym_sessions_cleaned" rows={gym} />
               </div>
             </div>
           </section>
-        </>
+        </section>
       ) : null}
 
       {activeTab === 'patients' ? (
@@ -207,11 +259,12 @@ function Admin() {
           rows={patients}
           rowIdKey="patient_id"
           editableKeys={['age', 'gender', 'weight_kg', 'height_cm']}
-          onSaveRow={async (id, payload) => {
-            await apiService.updatePatient(id, payload);
-            await fetchAll();
-          }}
-          hint="Correction manuelle : modifiez les champs puis enregistrez (JWT requis)."
+          onSaveRow={wrapSave(apiService.updatePatient)}
+          hint={
+            isSupervisor
+              ? 'Vos modifications sont appliquées directement.'
+              : 'Vos modifications sont soumises à la validation d\u2019un superviseur.'
+          }
         />
       ) : null}
 
@@ -220,17 +273,8 @@ function Admin() {
           title="Santé"
           rows={health}
           rowIdKey="patient"
-          editableKeys={[
-            'cholesterol',
-            'blood_pressure',
-            'disease_type',
-            'glucose',
-            'severity',
-          ]}
-          onSaveRow={async (id, payload) => {
-            await apiService.updateHealth(id, payload);
-            await fetchAll();
-          }}
+          editableKeys={['cholesterol', 'blood_pressure', 'disease_type', 'glucose', 'severity']}
+          onSaveRow={wrapSave(apiService.updateHealth)}
           hint="Astuce : si l'API renvoie 401/403, reconnectez-vous."
         />
       ) : null}
@@ -248,10 +292,7 @@ function Admin() {
             'diet_recommendation',
             'adherence_to_diet_plan',
           ]}
-          onSaveRow={async (id, payload) => {
-            await apiService.updateNutrition(id, payload);
-            await fetchAll();
-          }}
+          onSaveRow={wrapSave(apiService.updateNutrition)}
           hint="Ces corrections sont persistées en base (tables ETL)."
         />
       ) : null}
@@ -262,10 +303,7 @@ function Admin() {
           rows={activities}
           rowIdKey="patient"
           editableKeys={['physical_activity_level', 'weekly_exercice_hours']}
-          onSaveRow={async (id, payload) => {
-            await apiService.updateActivity(id, payload);
-            await fetchAll();
-          }}
+          onSaveRow={wrapSave(apiService.updateActivity)}
           hint="Modifiez seulement si vous avez identifié une anomalie."
         />
       ) : null}
@@ -288,11 +326,24 @@ function Admin() {
             'gym_experience_level',
             'calories_per_hour',
           ]}
-          onSaveRow={async (id, payload) => {
-            await apiService.updateGymSession(id, payload);
-            await fetchAll();
-          }}
+          onSaveRow={wrapSave(apiService.updateGymSession)}
           hint="Export disponible dans l'onglet Qualité des données."
+        />
+      ) : null}
+
+      {activeTab === 'approvals' ? (
+        <PendingChangesTable
+          rows={pendingChanges}
+          isSupervisor={isSupervisor}
+          onApprove={async (id, comment) => {
+            await apiService.approvePendingChange(id, comment);
+            showFlash('success', 'Modification approuvée et appliquée.');
+          }}
+          onReject={async (id, comment) => {
+            await apiService.rejectPendingChange(id, comment);
+            showFlash('success', 'Modification rejetée.');
+          }}
+          onRefresh={fetchPending}
         />
       ) : null}
     </div>

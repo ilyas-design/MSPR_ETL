@@ -384,8 +384,90 @@ class ETLPipeline:
             ex_df, transformations = apply_all_transformations(ex_df, "exercise", self.transformer)
             self.transformed_data["exercise"] = ex_df
             self.log_operation("TRANSFORM", f"Table exercise: {len(ex_df)} lignes")
-        
+
+        # Réconciliation des clés étrangères (indispensable avant `load()`
+        # puisque le schéma `BDD.sql` déclare les FK et que Django vérifie
+        # `check_constraints` à chaque migration).
+        self._reconcile_foreign_keys()
+
         return self.transformed_data
+
+    def _reconcile_foreign_keys(self) -> Dict[str, int]:
+        """
+        Supprime les lignes orphelines des tables enfant dont le `patient_id`
+        ne correspond à aucune ligne de `patient`.
+
+        Cause racine : le dataset Kaggle « gym » n'a pas de clé vers le dataset
+        « diet ». Le pipeline fabrique un `patient_id` synthétique pour chaque
+        session de gym, avec potentiellement plus de sessions que de patients
+        et/ou un formatage de largeur différent. Le résultat : des FK
+        invalides qui font échouer `manage.py migrate` côté Django
+        (cf. `IntegrityError: invalid foreign key`).
+
+        Cette méthode :
+          1. Uniformise le format `patient_id` des enfants sur celui des
+             patients connus (si une seule largeur canonique se dégage).
+          2. Supprime les lignes dont le `patient_id` n'existe toujours pas
+             dans la table `patient`.
+
+        Les suppressions sont journalisées pour le rapport ETL.
+        """
+        dropped: Dict[str, int] = {}
+        patient_df = self.transformed_data.get("patient")
+        if patient_df is None or patient_df.empty:
+            return dropped
+
+        valid_ids = set(patient_df["patient_id"].astype(str))
+
+        # Largeur canonique = nombre de chiffres après le 'P' dans les IDs
+        # patients. Si toutes les lignes patient utilisent le même format,
+        # on pourra ré-aligner les enfants qui auraient une autre largeur.
+        digit_widths = {
+            len(pid) - 1 for pid in valid_ids if pid.startswith("P") and pid[1:].isdigit()
+        }
+        canonical_digits = digit_widths.pop() if len(digit_widths) == 1 else None
+
+        child_tables = ("sante", "nutrition", "activite_physique", "gym_session")
+        for table in child_tables:
+            df = self.transformed_data.get(table)
+            if df is None or df.empty or "patient_id" not in df.columns:
+                continue
+
+            df = df.copy()
+            df["patient_id"] = df["patient_id"].astype(str)
+
+            # Étape 1 — tentative de ré-alignement de la largeur des chiffres.
+            if canonical_digits is not None:
+                def _realign(pid: str, width: int = canonical_digits) -> str:
+                    if not pid.startswith("P") or not pid[1:].isdigit():
+                        return pid
+                    return "P" + pid[1:].lstrip("0").zfill(width) if pid[1:].lstrip("0") else "P" + "0" * width
+
+                df["patient_id"] = df["patient_id"].map(_realign)
+
+            # Étape 2 — suppression des orphelins restants.
+            before = len(df)
+            df = df[df["patient_id"].isin(valid_ids)].reset_index(drop=True)
+            after = len(df)
+            removed = before - after
+
+            self.transformed_data[table] = df
+            if removed > 0:
+                dropped[table] = removed
+                self.log_operation(
+                    "FK_RECONCILE",
+                    f"Table {table} : {removed} ligne(s) orpheline(s) supprimée(s) "
+                    f"(patient_id absent de `patient`)",
+                    "WARNING",
+                )
+            else:
+                self.log_operation(
+                    "FK_RECONCILE",
+                    f"Table {table} : intégrité référentielle OK "
+                    f"({after} ligne(s) conservée(s))",
+                )
+
+        return dropped
     
     # =========================================================================
     # ÉTAPE 4: VALIDATION

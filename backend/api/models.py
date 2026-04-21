@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 class Patient(models.Model):
@@ -84,4 +85,65 @@ class GymSession(models.Model):
     def __str__(self):
         return f"Session {self.id} - Patient {self.patient.patient_id}"
 
+
+class PendingChange(models.Model):
+    """Modification admin en attente de validation par un superviseur.
+
+    Les tables ETL sont `managed=False` (schéma fourni par `BDD.sql`).
+    Les demandes de modification sont donc stockées ici, dans une table
+    Django-gérée, puis appliquées à la ligne cible après approbation.
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "En attente"),
+        (STATUS_APPROVED, "Approuvée"),
+        (STATUS_REJECTED, "Rejetée"),
+    ]
+
+    OPERATION_UPDATE = "update"
+    OPERATION_DELETE = "delete"
+    OPERATION_CHOICES = [
+        (OPERATION_UPDATE, "Mise à jour"),
+        (OPERATION_DELETE, "Suppression"),
+    ]
+
+    table_name = models.CharField(max_length=64)
+    record_id = models.CharField(max_length=64)
+    operation = models.CharField(
+        max_length=16, choices=OPERATION_CHOICES, default=OPERATION_UPDATE
+    )
+    changes = models.JSONField(default=dict, blank=True)
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pending_changes_submitted",
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pending_changes_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_comment = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-requested_at"]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["table_name", "record_id"]),
+        ]
+
+    def __str__(self):
+        return f"PendingChange#{self.pk} {self.table_name}/{self.record_id} ({self.status})"
 

@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 
 import { apiService } from "../services/api";
 import StatCard from "../components/StatCard";
+import { usePageTitle } from "../utils/usePageTitle";
 
 function Dashboard() {
+  usePageTitle("Tableau de bord");
   const [kpis, setKpis] = useState(null);
   const [engagement, setEngagement] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ function Dashboard() {
           <div className="page-title-row">
             <span className="page-eyebrow">Vue d'ensemble</span>
           </div>
-          <h2>Tableau de bord</h2>
+          <h1>Tableau de bord</h1>
           <p className="page-subtitle">
             Suivez en un coup d'œil les indicateurs clés sur la santé, la
             nutrition et l'activité physique de vos patients.
@@ -50,8 +52,8 @@ function Dashboard() {
         </div>
       </header>
 
-      <section className="section">
-        <h3 className="section-title">Panorama patients</h3>
+      <section className="section" aria-labelledby="dash-patients">
+        <h2 id="dash-patients" className="section-title">Panorama patients</h2>
         <div className="kpi-grid">
           <StatCard
             icon="👥"
@@ -78,8 +80,8 @@ function Dashboard() {
         </div>
       </section>
 
-      <section className="section">
-        <h3 className="section-title">Engagement</h3>
+      <section className="section" aria-labelledby="dash-engagement">
+        <h2 id="dash-engagement" className="section-title">Engagement</h2>
         <div className="kpi-grid">
           <StatCard
             icon="💪"
@@ -110,8 +112,8 @@ function Dashboard() {
         </div>
       </section>
 
-      <section className="section">
-        <h3 className="section-title">Nutrition &amp; activité</h3>
+      <section className="section" aria-labelledby="dash-nutri">
+        <h2 id="dash-nutri" className="section-title">Nutrition &amp; activité</h2>
         <div className="kpi-grid">
           <StatCard
             icon="🍎"

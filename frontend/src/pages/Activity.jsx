@@ -16,6 +16,9 @@ import {
   pieChartOptions,
   CHART_PALETTE,
 } from '../components/ChartOptions';
+import { usePageTitle } from '../utils/usePageTitle';
+import { AccessibleChart, ChartDataTable } from '../utils/chartA11y';
+import { buildChartSummary } from '../utils/chartA11yHelpers';
 
 ChartJS.register(
   CategoryScale,
@@ -28,6 +31,7 @@ ChartJS.register(
 );
 
 function Activity() {
+  usePageTitle('Activité physique');
   const [kpis, setKpis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -101,7 +105,7 @@ function Activity() {
           <div className="page-title-row">
             <span className="page-eyebrow">Activité</span>
           </div>
-          <h2>Activité physique &amp; gym</h2>
+          <h1>Activité physique &amp; gym</h1>
           <p className="page-subtitle">
             Vue sur les heures hebdomadaires d'exercice, les niveaux d'activité
             et les séances de gym des patients.
@@ -109,41 +113,98 @@ function Activity() {
         </div>
       </header>
 
-      <div className="charts-grid">
+      <section className="charts-grid" aria-label="Répartitions de l'activité physique">
         <div className="chart-container">
-          <h3>Heures d'exercice par semaine</h3>
-          <div className="chart-wrap">
-            <Pie data={exerciseData} options={pieChartOptions} />
-          </div>
+          <h2>Heures d'exercice par semaine</h2>
+          <AccessibleChart
+            title="Répartition circulaire des heures d'exercice hebdomadaires"
+            summary={buildChartSummary(
+              'Heures d\'exercice',
+              exerciseData.labels,
+              exerciseData.datasets[0].data
+            )}
+            dataTable={
+              <ChartDataTable
+                caption="Données du graphique : heures d'exercice"
+                headers={['Catégorie', 'Heures']}
+                rows={exerciseData.labels.map((l, i) => [
+                  l,
+                  exerciseData.datasets[0].data[i] ?? 0,
+                ])}
+              />
+            }
+          >
+            <div className="chart-wrap">
+              <Pie data={exerciseData} options={pieChartOptions} />
+            </div>
+          </AccessibleChart>
         </div>
         <div className="chart-container">
-          <h3>Niveaux d'activité physique</h3>
-          <div className="chart-wrap">
-            <Pie data={activityLevelData} options={pieChartOptions} />
-          </div>
+          <h2>Niveaux d'activité physique</h2>
+          <AccessibleChart
+            title="Répartition circulaire des niveaux d'activité physique"
+            summary={buildChartSummary(
+              "Niveaux d'activité physique",
+              activityLevelData.labels,
+              activityLevelData.datasets[0].data
+            )}
+            dataTable={
+              <ChartDataTable
+                caption="Données du graphique : niveaux d'activité physique"
+                headers={['Niveau', 'Nombre de patients']}
+                rows={activityLevelData.labels.map((l, i) => [
+                  l,
+                  activityLevelData.datasets[0].data[i] ?? 0,
+                ])}
+              />
+            }
+          >
+            <div className="chart-wrap">
+              <Pie data={activityLevelData} options={pieChartOptions} />
+            </div>
+          </AccessibleChart>
         </div>
-      </div>
+      </section>
 
-      <div className="charts-grid">
+      <section className="charts-grid" aria-label="Gym">
         <div className="chart-container">
-          <h3>Types d'exercices à la gym</h3>
-          <div className="chart-wrap">
-            <Bar data={workoutTypeData} options={chartOptions} />
-          </div>
+          <h2>Types d'exercices à la gym</h2>
+          <AccessibleChart
+            title="Graphique en barres des types d'exercices à la gym"
+            summary={buildChartSummary(
+              "Types d'exercices",
+              workoutTypeData.labels,
+              workoutTypeData.datasets[0].data
+            )}
+            dataTable={
+              <ChartDataTable
+                caption="Données du graphique : types d'exercices à la gym"
+                headers={["Type d'exercice", 'Nombre de sessions']}
+                rows={workoutTypeData.labels.map((l, i) => [
+                  l,
+                  workoutTypeData.datasets[0].data[i] ?? 0,
+                ])}
+              />
+            }
+          >
+            <div className="chart-wrap">
+              <Bar data={workoutTypeData} options={chartOptions} />
+            </div>
+          </AccessibleChart>
         </div>
-      </div>
+      </section>
 
-      <div className="stats-grid-large">
+      <section className="stats-grid-large" aria-label="Indicateurs activité">
         <div className="stat-box">
           <span className="stat-icon" aria-hidden="true">⏱️</span>
-          <h4>Heures d'exercice moyennes</h4>
+          <h2>Heures d'exercice moyennes</h2>
           <p className="big-number">{avgHours?.toFixed(1) || 0}</p>
           <span className="unit">heures/semaine</span>
         </div>
 
         <div className="stat-box">
           <span className="stat-icon" aria-hidden="true">🔥</span>
-          <h4>Calories brûlées (gym)</h4>
+          <h2>Calories brûlées (gym)</h2>
           <p className="big-number">
             {kpis?.gym?.avg_calories_burned?.toFixed(0) || 0}
           </p>
@@ -152,11 +213,11 @@ function Activity() {
 
         <div className="stat-box">
           <span className="stat-icon" aria-hidden="true">🎯</span>
-          <h4>Total patients</h4>
+          <h2>Total patients</h2>
           <p className="big-number">{kpis?.total_patients || 0}</p>
           <span className="unit">patients</span>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

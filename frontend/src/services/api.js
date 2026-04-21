@@ -135,6 +135,14 @@ export const apiService = {
   getGymSessions: () => api.get('/gym-sessions/'),
   updateGymSession: (id, payload) => api.patch(`/gym-sessions/${id}/`, payload),
 
+  // Current user / workflow d'approbation
+  getMe: () => api.get('/auth/me/'),
+  getPendingChanges: (params = {}) => api.get('/pending-changes/', { params }),
+  approvePendingChange: (id, comment = '') =>
+    api.post(`/pending-changes/${id}/approve/`, { comment }),
+  rejectPendingChange: (id, comment = '') =>
+    api.post(`/pending-changes/${id}/reject/`, { comment }),
+
   // KPIs
   getKPIs: () => api.get('/kpis/'),
   getEngagementKPIs: () => api.get('/engagement/'),

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
+import { usePageTitle } from '../utils/usePageTitle';
 
 function Login() {
+  usePageTitle('Connexion');
   const navigate = useNavigate();
   const location = useLocation();
   const [username, setUsername] = useState('');
@@ -28,17 +30,17 @@ function Login() {
   return (
     <div className="page">
       <div className="auth-shell">
-        <div className="auth-card" role="region" aria-label="Connexion">
+        <section className="auth-card" aria-labelledby="login-title">
           <div className="auth-header">
             <span className="page-eyebrow">Connexion</span>
-            <h2>Bon retour 👋</h2>
+            <h1 id="login-title">Bon retour <span aria-hidden="true">👋</span></h1>
             <p>
               Accédez à l'espace d'administration pour corriger des anomalies et
               exporter les données.
             </p>
           </div>
 
-          <form onSubmit={onSubmit} className="form" noValidate>
+          <form onSubmit={onSubmit} className="form" noValidate aria-describedby={error ? 'login-error' : undefined}>
             <div className="field">
               <label className="label" htmlFor="username">
                 Nom d'utilisateur
@@ -52,6 +54,8 @@ function Login() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
+                aria-required="true"
+                aria-invalid={error ? 'true' : 'false'}
               />
             </div>
 
@@ -68,11 +72,13 @@ function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                aria-required="true"
+                aria-invalid={error ? 'true' : 'false'}
               />
             </div>
 
             {error ? (
-              <div className="error" role="alert">
+              <div id="login-error" className="error" role="alert">
                 {error}
               </div>
             ) : null}
@@ -91,7 +97,7 @@ function Login() {
               Utilisez un compte Django (ex : superuser) configuré côté backend.
             </span>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

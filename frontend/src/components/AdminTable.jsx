@@ -56,10 +56,10 @@ function AdminTable({
   };
 
   return (
-    <section className="panel">
+    <section className="panel" aria-labelledby={`panel-title-${title}`}>
       <div className="panel-head">
         <div>
-          <h3 className="panel-title">{title}</h3>
+          <h2 id={`panel-title-${title}`} className="panel-title">{title}</h2>
           {hint ? <p className="panel-hint">{hint}</p> : null}
         </div>
         <div className="panel-actions">
@@ -69,8 +69,15 @@ function AdminTable({
 
       {saveError ? <div className="error" role="alert">{saveError}</div> : null}
 
-      <div className="table-wrap" role="region" aria-label={title}>
+      {/* tabindex=0 sur un conteneur scrollable est recommandé par WCAG
+          (technique SCR34) pour permettre la navigation clavier dans les
+          tableaux larges. */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+      <div className="table-wrap" tabIndex="0" role="region" aria-labelledby={`panel-title-${title}`}>
         <table className="table">
+          <caption className="visually-hidden">
+            {title} — {rows?.length || 0} lignes. Utilisez le bouton Modifier sur chaque ligne pour éditer les valeurs.
+          </caption>
           <thead>
             <tr>
               {columns.map((c) => (

@@ -16,6 +16,9 @@ import {
   pieChartOptions,
   CHART_PALETTE,
 } from '../components/ChartOptions';
+import { usePageTitle } from '../utils/usePageTitle';
+import { AccessibleChart, ChartDataTable } from '../utils/chartA11y';
+import { buildChartSummary } from '../utils/chartA11yHelpers';
 
 ChartJS.register(
   ArcElement,
@@ -28,6 +31,7 @@ ChartJS.register(
 );
 
 function Health() {
+  usePageTitle('Santé');
   const [kpis, setKpis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -83,7 +87,7 @@ function Health() {
           <div className="page-title-row">
             <span className="page-eyebrow">Santé</span>
           </div>
-          <h2>Données de santé</h2>
+          <h1>Données de santé</h1>
           <p className="page-subtitle">
             Répartition des pathologies observées et niveau de sévérité au sein
             de la population suivie.
@@ -91,31 +95,69 @@ function Health() {
         </div>
       </header>
 
-      <div className="charts-grid">
+      <section className="charts-grid" aria-label="Graphiques de santé">
         <div className="chart-container">
-          <h3>Types de maladies</h3>
-          <div className="chart-wrap">
-            <Pie data={diseasesData} options={pieChartOptions} />
-          </div>
+          <h2>Types de maladies</h2>
+          <AccessibleChart
+            title="Répartition circulaire des types de maladies observées"
+            summary={buildChartSummary(
+              'Types de maladies',
+              diseasesData.labels,
+              diseasesData.datasets[0].data
+            )}
+            dataTable={
+              <ChartDataTable
+                caption="Données du graphique : types de maladies"
+                headers={['Type de maladie', 'Nombre de patients']}
+                rows={diseasesData.labels.map((l, i) => [
+                  l,
+                  diseasesData.datasets[0].data[i] ?? 0,
+                ])}
+              />
+            }
+          >
+            <div className="chart-wrap">
+              <Pie data={diseasesData} options={pieChartOptions} />
+            </div>
+          </AccessibleChart>
         </div>
         <div className="chart-container">
-          <h3>Sévérité des maladies</h3>
-          <div className="chart-wrap">
-            <Bar data={severityData} options={chartOptions} />
-          </div>
+          <h2>Sévérité des maladies</h2>
+          <AccessibleChart
+            title="Graphique en barres de la sévérité des maladies"
+            summary={buildChartSummary(
+              'Sévérité des maladies',
+              severityData.labels,
+              severityData.datasets[0].data
+            )}
+            dataTable={
+              <ChartDataTable
+                caption="Données du graphique : sévérité des maladies"
+                headers={['Niveau de sévérité', 'Nombre de cas']}
+                rows={severityData.labels.map((l, i) => [
+                  l,
+                  severityData.datasets[0].data[i] ?? 0,
+                ])}
+              />
+            }
+          >
+            <div className="chart-wrap">
+              <Bar data={severityData} options={chartOptions} />
+            </div>
+          </AccessibleChart>
         </div>
-      </div>
+      </section>
 
-      <div className="stats-grid-large">
+      <section className="stats-grid-large" aria-label="Indicateurs clés de santé">
         <div className="stat-box">
           <span className="stat-icon" aria-hidden="true">❤️</span>
-          <h4>Cholestérol moyen</h4>
+          <h2>Cholestérol moyen</h2>
           <p className="big-number">
             {kpis?.sante?.avg_cholesterol?.toFixed(0) || 0}
           </p>
           <span className="unit">mg/dL</span>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
