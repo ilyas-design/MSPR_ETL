@@ -11,7 +11,7 @@ function Footer() {
           <span>MSPR Dashboard</span>
         </div>
         <p>
-          &copy; {currentYear} MSPR Dashboard — Suivi santé, nutrition et activité
+          &copy; {currentYear} HealthAI Coach — Suivi santé, nutrition et activité
           physique des patients.
         </p>
         <nav className="footer-links" aria-label="Liens légaux">
