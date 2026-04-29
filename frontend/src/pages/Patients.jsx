@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import PaginationBar from '../components/PaginationBar';
 import { apiService } from '../services/api';
 import { usePageTitle } from '../utils/usePageTitle';
+
+const PAGE_SIZE = 50;
 
 function getInitial(id) {
   if (!id) return '?';
@@ -11,43 +14,78 @@ function getInitial(id) {
 function Patients() {
   usePageTitle('Annuaire des patients');
   const [patients, setPatients] = useState([]);
+  const [totalCount, setTotalCount] = useState(null);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   useEffect(() => {
-    const fetchPatients = async () => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedPatient(null);
+  }, [debouncedSearch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchPatients() {
+      setLoading(true);
+      setError(null);
       try {
-        const response = await apiService.getPatients();
-        const list = response.data.results || response.data || [];
+        const params = {
+          page,
+          page_size: PAGE_SIZE,
+        };
+        if (debouncedSearch) {
+          params.search = debouncedSearch;
+        }
+        const response = await apiService.getPatients(params);
+        if (cancelled) return;
+        const data = response.data;
+        const list = Array.isArray(data.results)
+          ? data.results
+          : Array.isArray(data)
+            ? data
+            : [];
         setPatients(list);
-        setLoading(false);
-      } catch (err) {
-        setError(
-          err?.code === 'ERR_NETWORK'
-            ? 'Backend indisponible. Lancez Django sur http://localhost:8000.'
-            : 'Erreur au chargement des patients'
+        setTotalCount(
+          typeof data.count === 'number' ? data.count : list.length,
         );
-        setLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err?.code === 'ERR_NETWORK'
+              ? 'Backend indisponible. Lancez Django sur http://localhost:8000.'
+              : 'Erreur au chargement des patients'
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    };
-
+    }
     fetchPatients();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [page, debouncedSearch]);
 
-  const filteredPatients = useMemo(() => {
-    if (!searchTerm.trim()) return patients;
-    const q = searchTerm.toLowerCase();
-    return patients.filter(
-      (p) =>
-        String(p.patient_id).toLowerCase().includes(q) ||
-        String(p.age).includes(q) ||
-        String(p.gender).toLowerCase().includes(q)
-    );
-  }, [searchTerm, patients]);
+  const rangeCaption = useMemo(() => {
+    if (loading || totalCount == null) return 'Chargement…';
+    const tc = totalCount;
+    const fromIdx = tc === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+    const toIdx =
+      tc === 0 ? 0 : Math.min(page * PAGE_SIZE, tc);
+    return `${tc.toLocaleString('fr-FR')} patient(s)` + (tc === 0
+      ? ''
+      : ` (${fromIdx}–${toIdx} sur cette page)`);
+  }, [loading, totalCount, page]);
 
-  if (loading) return <div className="loading">Chargement des patients</div>;
   if (error) return <div className="error">{error}</div>;
 
   return (
@@ -60,19 +98,23 @@ function Patients() {
           <h1>Annuaire des patients</h1>
           <p className="page-subtitle">
             Parcourez la liste complète, recherchez un patient et consultez
-            rapidement ses indicateurs morphologiques.
+            rapidement ses indicateurs morphologiques. La recherche et la
+            pagination passent par l&apos;API (données volumineuses).
           </p>
         </div>
       </header>
 
       <div className="patients-container">
         <aside className="patients-list" aria-labelledby="patients-list-title">
-          <h2 id="patients-list-title">Liste des patients ({filteredPatients.length})</h2>
+          <h2 id="patients-list-title">Liste des patients</h2>
+          <p className="page-subtitle" style={{ marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+            {rangeCaption}
+          </p>
 
           <div className="search-box">
             <input
               type="search"
-              placeholder="Rechercher par ID, âge, genre..."
+              placeholder="Rechercher par ID, âge, genre…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="search-input"
@@ -83,9 +125,24 @@ function Patients() {
             </span>
           </div>
 
-          <div className="patient-items">
-            {filteredPatients.length > 0 ? (
-              filteredPatients.map((patient) => {
+          {!loading && typeof totalCount === 'number' ? (
+            <PaginationBar
+              page={page}
+              pageSize={PAGE_SIZE}
+              totalCount={totalCount}
+              disabled={loading}
+              onPageChange={(p) => setPage(p)}
+              labelledById="patients-list-title"
+            />
+          ) : null}
+
+          <div className="patient-items" aria-busy={loading}>
+            {loading ? (
+              <p className="loading" style={{ padding: '1rem' }}>
+                Chargement des patients…
+              </p>
+            ) : patients.length > 0 ? (
+              patients.map((patient) => {
                 const active =
                   selectedPatient?.patient_id === patient.patient_id;
                 return (

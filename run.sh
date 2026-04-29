@@ -118,10 +118,13 @@ else
   exit 1
 fi
 
+# After venv activation, 'python' always points to the venv interpreter on all platforms.
+PYTHON_BIN="python"
+
 # --- 2. Python dependencies ----------------------------------------------
 if [ "$SKIP_INSTALL" -eq 0 ]; then
   log "Upgrading pip"
-  pip install --quiet --upgrade pip
+  "$PYTHON_BIN" -m pip install --quiet --upgrade pip
 
   log "Installing ETL dependencies (requirements.txt)"
   pip install --quiet -r requirements.txt

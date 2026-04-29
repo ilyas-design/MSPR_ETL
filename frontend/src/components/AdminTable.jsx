@@ -13,6 +13,8 @@ function AdminTable({
   editableKeys = [],
   onSaveRow,
   hint,
+  totalCount,
+  loading,
 }) {
   const [editRowId, setEditRowId] = useState(null);
   const [draft, setDraft] = useState({});
@@ -63,17 +65,24 @@ function AdminTable({
           {hint ? <p className="panel-hint">{hint}</p> : null}
         </div>
         <div className="panel-actions">
-          <span className="chip">{rows?.length || 0} lignes</span>
+          <span className="chip">
+            {typeof totalCount === 'number'
+              ? `${rows?.length || 0} / ${totalCount.toLocaleString('fr-FR')} lignes`
+              : `${rows?.length || 0} lignes`}
+          </span>
         </div>
       </div>
 
       {saveError ? <div className="error" role="alert">{saveError}</div> : null}
 
-      {/* tabindex=0 sur un conteneur scrollable est recommandé par WCAG
-          (technique SCR34) pour permettre la navigation clavier dans les
-          tableaux larges. */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
-      <div className="table-wrap" tabIndex="0" role="region" aria-labelledby={`panel-title-${title}`}>
+      <div
+        className={`table-wrap${loading ? ' table-wrap--loading' : ''}`}
+        tabIndex="0"
+        role="region"
+        aria-busy={!!loading}
+        aria-labelledby={`panel-title-${title}`}
+      >
         <table className="table">
           <caption className="visually-hidden">
             {title} — {rows?.length || 0} lignes. Utilisez le bouton Modifier sur chaque ligne pour éditer les valeurs.

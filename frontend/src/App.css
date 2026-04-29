@@ -1259,10 +1259,49 @@ h3 {
   font-size: 0.8rem;
 }
 
+.export-hint {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  margin: 0 0 0.5rem;
+  line-height: 1.35;
+}
+
+.pagination-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.pagination-meta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+.pagination-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 .table-wrap {
   overflow: auto;
   max-width: 100%;
   -webkit-overflow-scrolling: touch;
+  position: relative;
+  transition: opacity 0.18s ease;
+}
+
+.table-wrap--loading {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .table {

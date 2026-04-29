@@ -1,5 +1,14 @@
 import axios from 'axios';
 
+import { fetchAllPaged } from './pagination';
+
+/** Taille de page par défaut (alignée sur le backend). */
+const PAGE_SIZE_DEFAULT = 50;
+
+function withPageDefaults(params = {}) {
+  return { page_size: PAGE_SIZE_DEFAULT, ...params };
+}
+
 // Dev: Vite proxy forwards /api -> http://localhost:8000
 // Prod: set VITE_API_URL (e.g. https://your-domain.tld/api)
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -114,26 +123,38 @@ export const apiService = {
   isAuthenticated: () =>
     !!(localStorage.getItem(TOKEN_KEY) || localStorage.getItem(REFRESH_KEY)),
 
-  // Patients
-  getPatients: () => api.get('/patients/'),
+  // Patients (listes paginées : ?page= & page_size= & search=)
+  getPatients: (params = {}) => api.get('/patients/', { params: withPageDefaults(params) }),
   getPatient: (id) => api.get(`/patients/${id}/`),
   updatePatient: (id, payload) => api.patch(`/patients/${id}/`, payload),
+  getAllPatientsPaged: () =>
+    fetchAllPaged((p) => api.get('/patients/', { params: p })),
 
   // Health/Santé
-  getHealthData: () => api.get('/sante/'),
+  getHealthData: (params = {}) => api.get('/sante/', { params: withPageDefaults(params) }),
   updateHealth: (id, payload) => api.patch(`/sante/${id}/`, payload),
+  getAllHealthPaged: () =>
+    fetchAllPaged((p) => api.get('/sante/', { params: p })),
 
   // Nutrition
-  getNutrition: () => api.get('/nutrition/'),
+  getNutrition: (params = {}) => api.get('/nutrition/', { params: withPageDefaults(params) }),
   updateNutrition: (id, payload) => api.patch(`/nutrition/${id}/`, payload),
+  getAllNutritionPaged: () =>
+    fetchAllPaged((p) => api.get('/nutrition/', { params: p })),
 
   // Physical Activity
-  getActivities: () => api.get('/activite-physique/'),
+  getActivities: (params = {}) =>
+    api.get('/activite-physique/', { params: withPageDefaults(params) }),
   updateActivity: (id, payload) => api.patch(`/activite-physique/${id}/`, payload),
+  getAllActivitiesPaged: () =>
+    fetchAllPaged((p) => api.get('/activite-physique/', { params: p })),
 
   // Gym Sessions
-  getGymSessions: () => api.get('/gym-sessions/'),
+  getGymSessions: (params = {}) =>
+    api.get('/gym-sessions/', { params: withPageDefaults(params) }),
   updateGymSession: (id, payload) => api.patch(`/gym-sessions/${id}/`, payload),
+  getAllGymSessionsPaged: () =>
+    fetchAllPaged((p) => api.get('/gym-sessions/', { params: p })),
 
   // Current user / workflow d'approbation
   getMe: () => api.get('/auth/me/'),

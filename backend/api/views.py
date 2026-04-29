@@ -5,9 +5,12 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from .filter_backends import PatientSearchFilter
 
 from .models import (
     ActivitePhysique,
@@ -116,38 +119,75 @@ class ApprovalWorkflowMixin:
 # ---------------------------------------------------------------------------
 
 class PatientViewSet(ApprovalWorkflowMixin, viewsets.ModelViewSet):
-    queryset = Patient.objects.all()
+    queryset = Patient.objects.all().order_by("patient_id")
     serializer_class = PatientSerializer
     approval_table_name = "patient"
-    pagination_class = None
+    filter_backends = [PatientSearchFilter, OrderingFilter]
+    ordering_fields = (
+        "patient_id",
+        "age",
+        "gender",
+        "weight_kg",
+        "height_cm",
+        "bmi_calculated",
+    )
+    ordering = ("patient_id",)
 
 
 class SanteViewSet(ApprovalWorkflowMixin, viewsets.ModelViewSet):
-    queryset = Sante.objects.all()
+    queryset = Sante.objects.all().order_by("patient_id")
     serializer_class = SanteSerializer
     approval_table_name = "sante"
     pagination_class = None
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ("patient_id", "disease_type", "severity")
+    ordering_fields = ("patient_id",)
+    ordering = ("patient_id",)
 
 
 class NutritionViewSet(ApprovalWorkflowMixin, viewsets.ModelViewSet):
-    queryset = Nutrition.objects.all()
+    queryset = Nutrition.objects.all().order_by("patient_id")
     serializer_class = NutritionSerializer
     approval_table_name = "nutrition"
     pagination_class = None
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = (
+        "patient_id",
+        "diet_recommendation",
+        "dietary_restrictions",
+        "preferred_cuisine",
+        "allergies",
+    )
+    ordering_fields = ("patient_id",)
+    ordering = ("patient_id",)
 
 
 class ActivitePhysiqueViewSet(ApprovalWorkflowMixin, viewsets.ModelViewSet):
-    queryset = ActivitePhysique.objects.all()
+    queryset = ActivitePhysique.objects.all().order_by("patient_id")
     serializer_class = ActivitePhysiqueSerializer
     approval_table_name = "activite_physique"
     pagination_class = None
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ("patient_id", "physical_activity_level")
+    ordering_fields = ("patient_id",)
+    ordering = ("patient_id",)
 
 
 class GymSessionViewSet(ApprovalWorkflowMixin, viewsets.ModelViewSet):
-    queryset = GymSession.objects.all()
+    queryset = GymSession.objects.all().order_by("id")
     serializer_class = GymSessionSerializer
     approval_table_name = "gym_session"
     pagination_class = None
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ("patient_id", "gym_workout_type")
+    ordering_fields = (
+        "id",
+        "patient_id",
+        "gym_calories_burned",
+        "gym_session_duration_hours",
+        "gym_workout_type",
+    )
+    ordering = ("id",)
 
 
 # ---------------------------------------------------------------------------
