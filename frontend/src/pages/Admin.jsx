@@ -2,14 +2,35 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminTable from '../components/AdminTable';
 import ExportButtons from '../components/ExportButtons';
+import PaginationBar from '../components/PaginationBar';
 import PendingChangesTable from '../components/PendingChangesTable';
 import { apiService } from '../services/api';
 import { usePageTitle } from '../utils/usePageTitle';
+
+const DATA_TABS = [
+  'patients',
+  'health',
+  'nutrition',
+  'activities',
+  'gym',
+];
+const PAGE_SIZE_ADMIN = 50;
+
+const emptyPageState = () =>
+  DATA_TABS.reduce(
+    (acc, k) => {
+      acc[k] = 1;
+      return acc;
+    },
+    /** @type Record<string, number> */ ({}),
+  );
 
 function Admin() {
   usePageTitle('Administration');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [tabLoading, setTabLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
   const [patients, setPatients] = useState([]);
@@ -17,6 +38,11 @@ function Admin() {
   const [nutrition, setNutrition] = useState([]);
   const [activities, setActivities] = useState([]);
   const [gym, setGym] = useState([]);
+
+  const [countByTab, setCountByTab] = useState(
+    /** @type Record<string, number> */ ({}),
+  );
+  const [pageByTab, setPageByTab] = useState(() => emptyPageState());
 
   const [me, setMe] = useState(null);
   const [pendingChanges, setPendingChanges] = useState([]);
@@ -39,43 +65,141 @@ function Admin() {
     }
   }, []);
 
-  const fetchAll = useCallback(async () => {
+  const fetchMeta = useCallback(async () => {
+    const [dq, meResp] = await Promise.all([
+      apiService.getDataQualityKPIs(),
+      apiService.getMe().catch(() => null),
+    ]);
+    setDataQuality(dq.data);
+    setMe(meResp?.data || null);
+    await fetchPending();
+  }, [fetchPending]);
+
+  const loadDataTab = useCallback(async (tab, pageNum) => {
+    const params = { page: pageNum, page_size: PAGE_SIZE_ADMIN };
+    switch (tab) {
+      case 'patients':
+        return apiService.getPatients(params);
+      case 'health':
+        return apiService.getHealthData(params);
+      case 'nutrition':
+        return apiService.getNutrition(params);
+      case 'activities':
+        return apiService.getActivities(params);
+      case 'gym':
+        return apiService.getGymSessions(params);
+      default:
+        return null;
+    }
+  }, []);
+
+  const applyRows = useCallback((tab, rows) => {
+    const setters = {
+      patients: setPatients,
+      health: setHealth,
+      nutrition: setNutrition,
+      activities: setActivities,
+      gym: setGym,
+    };
+    const fn = setters[tab];
+    if (fn) fn(rows);
+  }, []);
+
+  const currentListPage = DATA_TABS.includes(activeTab)
+    ? pageByTab[activeTab] ?? 1
+    : 1;
+
+  useEffect(() => {
+    if (!DATA_TABS.includes(activeTab)) return undefined;
+    let cancelled = false;
+
+    async function run() {
+      setTabLoading(true);
+      setError(null);
+      try {
+        const page = currentListPage;
+        const resp = await loadDataTab(activeTab, page);
+        if (cancelled || !resp) return;
+        const data = resp.data;
+        const rows = Array.isArray(data.results)
+          ? data.results
+          : Array.isArray(data)
+            ? data
+            : [];
+        const count =
+          typeof data.count === 'number' ? data.count : rows.length;
+        setCountByTab((prev) => ({ ...prev, [activeTab]: count }));
+        applyRows(activeTab, rows);
+      } catch {
+        if (!cancelled) {
+          setError(
+            'Erreur lors du chargement. Vérifiez le backend (port 8000) et l’authentification JWT.',
+          );
+        }
+      } finally {
+        if (!cancelled) setTabLoading(false);
+      }
+    }
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, currentListPage, applyRows, loadDataTab]);
+
+  const refreshCurrentTab = useCallback(async () => {
+    if (!DATA_TABS.includes(activeTab)) return;
+    const page = pageByTab[activeTab] ?? 1;
+    setTabLoading(true);
     setError(null);
-    setLoading(true);
     try {
-      const [p, h, n, a, g, dq, meResp] = await Promise.all([
-        apiService.getPatients(),
-        apiService.getHealthData(),
-        apiService.getNutrition(),
-        apiService.getActivities(),
-        apiService.getGymSessions(),
-        apiService.getDataQualityKPIs(),
-        apiService.getMe().catch(() => null),
-      ]);
-      setPatients(unwrap(p));
-      setHealth(unwrap(h));
-      setNutrition(unwrap(n));
-      setActivities(unwrap(a));
-      setGym(unwrap(g));
-      setDataQuality(dq.data);
-      setMe(meResp?.data || null);
-      await fetchPending();
+      const resp = await loadDataTab(activeTab, page);
+      if (!resp) return;
+      const data = resp.data;
+      const rows = Array.isArray(data.results)
+        ? data.results
+        : Array.isArray(data)
+          ? data
+          : [];
+      const count =
+        typeof data.count === 'number' ? data.count : rows.length;
+      setCountByTab((prev) => ({ ...prev, [activeTab]: count }));
+      applyRows(activeTab, rows);
     } catch {
       setError(
-        "Erreur lors du chargement. Vérifiez le backend (port 8000) et l'authentification JWT."
+        'Erreur lors du chargement. Vérifiez le backend (port 8000) et l’authentification JWT.',
       );
     } finally {
-      setLoading(false);
+      setTabLoading(false);
     }
-  }, [fetchPending]);
+  }, [activeTab, applyRows, loadDataTab, pageByTab]);
 
   useEffect(() => {
     if (!isAuthed) {
       navigate('/login', { state: { next: '/admin' } });
-      return;
+      return undefined;
     }
-    fetchAll();
-  }, [isAuthed, navigate, fetchAll]);
+    let cancelled = false;
+    async function boot() {
+      setLoading(true);
+      setError(null);
+      try {
+        await fetchMeta();
+      } catch {
+        if (!cancelled) {
+          setError(
+            "Erreur lors du chargement. Vérifiez le backend (port 8000) et l'authentification JWT.",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    boot();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthed, navigate, fetchMeta]);
 
   useEffect(() => {
     if (!flash) return undefined;
@@ -84,6 +208,21 @@ function Admin() {
   }, [flash]);
 
   const showFlash = (level, message) => setFlash({ level, message });
+
+  const refreshAll = useCallback(async () => {
+    setError(null);
+    setRefreshing(true);
+    try {
+      await fetchMeta();
+      if (DATA_TABS.includes(activeTab)) await refreshCurrentTab();
+    } catch {
+      setError(
+        "Erreur lors du chargement. Vérifiez le backend (port 8000) et l'authentification JWT.",
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }, [activeTab, fetchMeta, refreshCurrentTab]);
 
   /**
    * Wrapper d'édition qui gère le retour 202 (modification en attente)
@@ -94,14 +233,19 @@ function Admin() {
     if (resp?.status === 202) {
       showFlash(
         'info',
-        'Modification enregistrée et soumise à validation. Un superviseur doit l\u2019approuver.'
+        'Modification enregistrée et soumise à validation. Un superviseur doit l\u2019approuver.',
       );
       await fetchPending();
       setActiveTab('approvals');
     } else {
       showFlash('success', successMsg || 'Modification appliquée.');
-      await fetchAll();
+      await refreshCurrentTab();
+      await fetchMeta();
     }
+  };
+
+  const setPageForTab = (tab, p) => {
+    setPageByTab((prev) => ({ ...prev, [tab]: p }));
   };
 
   const tabs = useMemo(() => {
@@ -113,7 +257,8 @@ function Admin() {
       { id: 'activities', label: 'Activité physique' },
       { id: 'gym', label: 'Séances gym' },
     ];
-    const pendingCount = pendingChanges.filter((p) => p.status === 'pending').length;
+    const pendingCount = pendingChanges.filter((pc) => pc.status === 'pending')
+      .length;
     const label = pendingCount
       ? `Demandes d'approbation (${pendingCount})`
       : 'Demandes d\u2019approbation';
@@ -135,8 +280,11 @@ function Admin() {
     ];
   }, [dataQuality]);
 
-  if (loading) return <div className="loading">Chargement</div>;
-  if (error) return <div className="error">{error}</div>;
+  const busyRefreshing = refreshing || tabLoading;
+
+  if (loading) {
+    return <div className="loading">Chargement</div>;
+  }
 
   return (
     <div className="page">
@@ -160,7 +308,7 @@ function Admin() {
           <h1 className="admin-title">Console d&apos;administration</h1>
           <p className="admin-subtitle">
             Surveillez la qualité, corrigez les anomalies et exportez les
-            données nettoyées.
+            données nettoyées (exports : chargement paginé de toutes les lignes via l’API).
             {!isSupervisor
               ? ' Vos modifications sont soumises au workflow de validation.'
               : ''}
@@ -170,8 +318,8 @@ function Admin() {
           <button
             className="btn btn-secondary"
             type="button"
-            onClick={fetchAll}
-            disabled={loading}
+            onClick={refreshAll}
+            disabled={busyRefreshing}
           >
             Rafraîchir
           </button>
@@ -185,6 +333,12 @@ function Admin() {
           className={`flash flash-${flash.level}`}
         >
           {flash.message}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="error" role="alert">
+          {error}
         </div>
       ) : null}
 
@@ -223,30 +377,50 @@ function Admin() {
               <div>
                 <h2 id="export-title" className="panel-title">Export global</h2>
                 <p className="panel-hint">
-                  Exportez les données affichées (API) en CSV ou JSON.
+                  CSV / JSON consolidés ; chaque fichier charge toutes les pages via l’API (volumes importants acceptés).
                 </p>
               </div>
             </div>
             <div className="export-grid">
               <div className="export-card">
-                <div className="export-title">👥 Patients</div>
-                <ExportButtons filenamePrefix="patients_cleaned" rows={patients} />
+                <div className="export-title">Patients</div>
+                <ExportButtons
+                  filenamePrefix="patients_cleaned"
+                  rows={[]}
+                  fetchAllRows={apiService.getAllPatientsPaged}
+                />
               </div>
               <div className="export-card">
-                <div className="export-title">❤️ Santé</div>
-                <ExportButtons filenamePrefix="sante_cleaned" rows={health} />
+                <div className="export-title">Santé</div>
+                <ExportButtons
+                  filenamePrefix="sante_cleaned"
+                  rows={[]}
+                  fetchAllRows={apiService.getAllHealthPaged}
+                />
               </div>
               <div className="export-card">
-                <div className="export-title">🍎 Nutrition</div>
-                <ExportButtons filenamePrefix="nutrition_cleaned" rows={nutrition} />
+                <div className="export-title">Nutrition</div>
+                <ExportButtons
+                  filenamePrefix="nutrition_cleaned"
+                  rows={[]}
+                  fetchAllRows={apiService.getAllNutritionPaged}
+                />
               </div>
               <div className="export-card">
-                <div className="export-title">🏃 Activité</div>
-                <ExportButtons filenamePrefix="activite_physique_cleaned" rows={activities} />
+                <div className="export-title">Activité</div>
+                <ExportButtons
+                  filenamePrefix="activite_physique_cleaned"
+                  rows={[]}
+                  fetchAllRows={apiService.getAllActivitiesPaged}
+                />
               </div>
               <div className="export-card">
-                <div className="export-title">🏋️ Gym</div>
-                <ExportButtons filenamePrefix="gym_sessions_cleaned" rows={gym} />
+                <div className="export-title">Séances gym</div>
+                <ExportButtons
+                  filenamePrefix="gym_sessions_cleaned"
+                  rows={[]}
+                  fetchAllRows={apiService.getAllGymSessionsPaged}
+                />
               </div>
             </div>
           </section>
@@ -254,81 +428,141 @@ function Admin() {
       ) : null}
 
       {activeTab === 'patients' ? (
-        <AdminTable
-          title="Patients"
-          rows={patients}
-          rowIdKey="patient_id"
-          editableKeys={['age', 'gender', 'weight_kg', 'height_cm']}
-          onSaveRow={wrapSave(apiService.updatePatient)}
-          hint={
-            isSupervisor
-              ? 'Vos modifications sont appliquées directement.'
-              : 'Vos modifications sont soumises à la validation d\u2019un superviseur.'
-          }
-        />
+        <>
+          <PaginationBar
+            page={pageByTab.patients ?? 1}
+            pageSize={PAGE_SIZE_ADMIN}
+            totalCount={countByTab.patients ?? 0}
+            onPageChange={(p) => setPageForTab('patients', p)}
+            disabled={tabLoading}
+            labelledById="panel-title-Patients"
+          />
+          <AdminTable
+            title="Patients"
+            rows={patients}
+            rowIdKey="patient_id"
+            editableKeys={['age', 'gender', 'weight_kg', 'height_cm']}
+            onSaveRow={wrapSave(apiService.updatePatient)}
+            hint={
+              isSupervisor
+                ? 'Vos modifications sont appliquées directement.'
+                : 'Vos modifications sont soumises à la validation d\u2019un superviseur.'
+            }
+            totalCount={countByTab.patients}
+            loading={tabLoading}
+          />
+        </>
       ) : null}
 
       {activeTab === 'health' ? (
-        <AdminTable
-          title="Santé"
-          rows={health}
-          rowIdKey="patient"
-          editableKeys={['cholesterol', 'blood_pressure', 'disease_type', 'glucose', 'severity']}
-          onSaveRow={wrapSave(apiService.updateHealth)}
-          hint="Astuce : si l'API renvoie 401/403, reconnectez-vous."
-        />
+        <>
+          <PaginationBar
+            page={pageByTab.health ?? 1}
+            pageSize={PAGE_SIZE_ADMIN}
+            totalCount={countByTab.health ?? 0}
+            onPageChange={(p) => setPageForTab('health', p)}
+            disabled={tabLoading}
+            labelledById="panel-title-Santé"
+          />
+          <AdminTable
+            title="Santé"
+            rows={health}
+            rowIdKey="patient"
+            editableKeys={['cholesterol', 'blood_pressure', 'disease_type', 'glucose', 'severity']}
+            onSaveRow={wrapSave(apiService.updateHealth)}
+            hint="Astuce : si l'API renvoie 401/403, reconnectez-vous."
+            totalCount={countByTab.health}
+            loading={tabLoading}
+          />
+        </>
       ) : null}
 
       {activeTab === 'nutrition' ? (
-        <AdminTable
-          title="Nutrition"
-          rows={nutrition}
-          rowIdKey="patient"
-          editableKeys={[
-            'daily_caloric_intake',
-            'dietary_restrictions',
-            'allergies',
-            'preferred_cuisine',
-            'diet_recommendation',
-            'adherence_to_diet_plan',
-          ]}
-          onSaveRow={wrapSave(apiService.updateNutrition)}
-          hint="Ces corrections sont persistées en base (tables ETL)."
-        />
+        <>
+          <PaginationBar
+            page={pageByTab.nutrition ?? 1}
+            pageSize={PAGE_SIZE_ADMIN}
+            totalCount={countByTab.nutrition ?? 0}
+            onPageChange={(p) => setPageForTab('nutrition', p)}
+            disabled={tabLoading}
+            labelledById="panel-title-Nutrition"
+          />
+          <AdminTable
+            title="Nutrition"
+            rows={nutrition}
+            rowIdKey="patient"
+            editableKeys={[
+              'daily_caloric_intake',
+              'dietary_restrictions',
+              'allergies',
+              'preferred_cuisine',
+              'diet_recommendation',
+              'adherence_to_diet_plan',
+            ]}
+            onSaveRow={wrapSave(apiService.updateNutrition)}
+            hint="Ces corrections sont persistées en base (tables ETL)."
+            totalCount={countByTab.nutrition}
+            loading={tabLoading}
+          />
+        </>
       ) : null}
 
       {activeTab === 'activities' ? (
-        <AdminTable
-          title="Activité physique"
-          rows={activities}
-          rowIdKey="patient"
-          editableKeys={['physical_activity_level', 'weekly_exercice_hours']}
-          onSaveRow={wrapSave(apiService.updateActivity)}
-          hint="Modifiez seulement si vous avez identifié une anomalie."
-        />
+        <>
+          <PaginationBar
+            page={pageByTab.activities ?? 1}
+            pageSize={PAGE_SIZE_ADMIN}
+            totalCount={countByTab.activities ?? 0}
+            onPageChange={(p) => setPageForTab('activities', p)}
+            disabled={tabLoading}
+            labelledById="panel-title-Activité physique"
+          />
+          <AdminTable
+            title="Activité physique"
+            rows={activities}
+            rowIdKey="patient"
+            editableKeys={['physical_activity_level', 'weekly_exercice_hours']}
+            onSaveRow={wrapSave(apiService.updateActivity)}
+            hint="Modifiez seulement si vous avez identifié une anomalie."
+            totalCount={countByTab.activities}
+            loading={tabLoading}
+          />
+        </>
       ) : null}
 
       {activeTab === 'gym' ? (
-        <AdminTable
-          title="Séances gym"
-          rows={gym}
-          rowIdKey="id"
-          editableKeys={[
-            'gym_session_duration_hours',
-            'gym_calories_burned',
-            'gym_workout_type',
-            'gym_max_bpm',
-            'gym_avg_bpm',
-            'gym_resting_bpm',
-            'gym_fat_percentage',
-            'gym_water_intake_liters',
-            'gym_workout_frequency_days_week',
-            'gym_experience_level',
-            'calories_per_hour',
-          ]}
-          onSaveRow={wrapSave(apiService.updateGymSession)}
-          hint="Export disponible dans l'onglet Qualité des données."
-        />
+        <>
+          <PaginationBar
+            page={pageByTab.gym ?? 1}
+            pageSize={PAGE_SIZE_ADMIN}
+            totalCount={countByTab.gym ?? 0}
+            onPageChange={(p) => setPageForTab('gym', p)}
+            disabled={tabLoading}
+            labelledById="panel-title-Séances gym"
+          />
+          <AdminTable
+            title="Séances gym"
+            rows={gym}
+            rowIdKey="id"
+            editableKeys={[
+              'gym_session_duration_hours',
+              'gym_calories_burned',
+              'gym_workout_type',
+              'gym_max_bpm',
+              'gym_avg_bpm',
+              'gym_resting_bpm',
+              'gym_fat_percentage',
+              'gym_water_intake_liters',
+              'gym_workout_frequency_days_week',
+              'gym_experience_level',
+              'calories_per_hour',
+            ]}
+            onSaveRow={wrapSave(apiService.updateGymSession)}
+            hint="Export disponible dans l'onglet Qualité des données."
+            totalCount={countByTab.gym}
+            loading={tabLoading}
+          />
+        </>
       ) : null}
 
       {activeTab === 'approvals' ? (
