@@ -119,30 +119,35 @@ class PatientViewSet(ApprovalWorkflowMixin, viewsets.ModelViewSet):
     queryset = Patient.objects.all()
     serializer_class = PatientSerializer
     approval_table_name = "patient"
+    pagination_class = None
 
 
 class SanteViewSet(ApprovalWorkflowMixin, viewsets.ModelViewSet):
     queryset = Sante.objects.all()
     serializer_class = SanteSerializer
     approval_table_name = "sante"
+    pagination_class = None
 
 
 class NutritionViewSet(ApprovalWorkflowMixin, viewsets.ModelViewSet):
     queryset = Nutrition.objects.all()
     serializer_class = NutritionSerializer
     approval_table_name = "nutrition"
+    pagination_class = None
 
 
 class ActivitePhysiqueViewSet(ApprovalWorkflowMixin, viewsets.ModelViewSet):
     queryset = ActivitePhysique.objects.all()
     serializer_class = ActivitePhysiqueSerializer
     approval_table_name = "activite_physique"
+    pagination_class = None
 
 
 class GymSessionViewSet(ApprovalWorkflowMixin, viewsets.ModelViewSet):
     queryset = GymSession.objects.all()
     serializer_class = GymSessionSerializer
     approval_table_name = "gym_session"
+    pagination_class = None
 
 
 # ---------------------------------------------------------------------------
