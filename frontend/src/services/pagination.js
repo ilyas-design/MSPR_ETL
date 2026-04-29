@@ -6,7 +6,6 @@ export async function fetchAllPaged(getPageFn) {
   const all = [];
   let page = 1;
   const pageSize = 200;
-  /* eslint-disable no-await-in-loop */
   for (;;) {
     const resp = await getPageFn({ page, page_size: pageSize });
     const data = resp?.data ?? resp;
@@ -23,6 +22,5 @@ export async function fetchAllPaged(getPageFn) {
     if (chunk.length < pageSize) break;
     page += 1;
   }
-  /* eslint-enable no-await-in-loop */
   return all;
 }
