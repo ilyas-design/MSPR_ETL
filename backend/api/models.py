@@ -86,6 +86,95 @@ class GymSession(models.Model):
         return f"Session {self.id} - Patient {self.patient.patient_id}"
 
 
+class FoodLog(models.Model):
+    id = models.AutoField(primary_key=True)
+    date = models.CharField(max_length=20)
+    user_id = models.IntegerField()
+    food_item = models.CharField(max_length=200)
+    category = models.CharField(max_length=100, null=True, blank=True)
+    calories_kcal = models.IntegerField(null=True, blank=True)
+    protein_g = models.FloatField(null=True, blank=True)
+    carbohydrates_g = models.FloatField(null=True, blank=True)
+    fat_g = models.FloatField(null=True, blank=True)
+    fiber_g = models.FloatField(null=True, blank=True)
+    sugars_g = models.FloatField(null=True, blank=True)
+    sodium_mg = models.FloatField(null=True, blank=True)
+    cholesterol_mg = models.FloatField(null=True, blank=True)
+    meal_type = models.CharField(max_length=50, null=True, blank=True)
+    water_intake_ml = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'food_log'
+        managed = False
+
+    def __str__(self):
+        return f"FoodLog {self.id} - {self.food_item}"
+
+
+class Exercise(models.Model):
+    exercise_id = models.IntegerField(primary_key=True)
+    name = models.CharField(max_length=200)
+    body_part = models.CharField(max_length=100, null=True, blank=True)
+    target = models.CharField(max_length=100, null=True, blank=True)
+    equipment = models.CharField(max_length=100, null=True, blank=True)
+    level = models.CharField(max_length=50, null=True, blank=True)
+    instructions = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'exercise'
+        managed = False
+
+    def __str__(self):
+        return f"Exercise {self.exercise_id} - {self.name}"
+
+
+class UserProfile(models.Model):
+    GOAL_CHOICES = [
+        ('weight_loss', 'Weight Loss'),
+        ('muscle_gain', 'Muscle Gain'),
+        ('maintenance', 'Maintenance'),
+        ('endurance', 'Endurance'),
+    ]
+    LEVEL_CHOICES = [
+        ('beginner', 'Beginner'),
+        ('intermediate', 'Intermediate'),
+        ('advanced', 'Advanced'),
+    ]
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile'
+    )
+    goal = models.CharField(max_length=50, choices=GOAL_CHOICES, default='maintenance')
+    daily_calorie_target = models.IntegerField(null=True, blank=True)
+    allergies = models.JSONField(default=list)
+    dietary_restrictions = models.JSONField(default=list)
+    equipment_available = models.JSONField(default=list)
+    experience_level = models.CharField(
+        max_length=20, choices=LEVEL_CHOICES, null=True, blank=True
+    )
+
+    def __str__(self):
+        return f"Profile({self.user.username})"
+
+
+class MealEntry(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='meal_entries'
+    )
+    analyzed_at = models.DateTimeField(auto_now_add=True)
+    meal_type = models.CharField(max_length=50, null=True, blank=True)
+    detected_foods = models.JSONField(default=list)
+    total_calories = models.FloatField(null=True, blank=True)
+    macros = models.JSONField(default=dict)
+    image_hash = models.CharField(max_length=64, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-analyzed_at']
+
+    def __str__(self):
+        return f"MealEntry({self.user.username}, {self.analyzed_at:%Y-%m-%d})"
+
+
 class PendingChange(models.Model):
     """Modification admin en attente de validation par un superviseur.
 

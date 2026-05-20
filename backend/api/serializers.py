@@ -6,6 +6,10 @@ from .models import (
     ActivitePhysique,
     GymSession,
     PendingChange,
+    FoodLog,
+    Exercise,
+    UserProfile,
+    MealEntry,
 )
 
 class PatientSerializer(serializers.ModelSerializer):
@@ -32,6 +36,32 @@ class GymSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model=GymSession
         fields='__all__'
+
+
+class FoodLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FoodLog
+        fields = '__all__'
+
+
+class ExerciseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Exercise
+        fields = '__all__'
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = '__all__'
+        read_only_fields = ['user']
+
+
+class MealEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MealEntry
+        fields = '__all__'
+        read_only_fields = ['user', 'analyzed_at']
 
 
 class PendingChangeSerializer(serializers.ModelSerializer):

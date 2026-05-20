@@ -80,12 +80,33 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+DB_PATH = os.environ.get('DB_PATH', os.path.join(os.path.dirname(BASE_DIR), 'mspr_etl.db'))
+
 DATABASES = {
     'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('POSTGRES_DB', 'healthai'),
+        'USER': os.environ.get('POSTGRES_USER', 'healthai'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'healthai'),
+        'HOST': os.environ.get('POSTGRES_HOST', 'app-postgres'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+    },
+    'etl': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.environ.get('DB_PATH', os.path.join(os.path.dirname(BASE_DIR), 'mspr_etl.db')),
+        'NAME': DB_PATH,
+    },
+}
+
+DATABASE_ROUTERS = ['api.db_router.HealthAIRouter']
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': '/tmp/django_cache_healthai',
     }
 }
+
+NUTRITION_API_URL = os.environ.get('NUTRITION_API_URL', 'http://nutrition-api:8001')
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'api.pagination.ConfigurablePageNumberPagination',
