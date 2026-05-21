@@ -4,6 +4,9 @@ import SignUp from './pages/SignUp';
 import Dashboard from './pages/Dashboard';
 import AuthGate from './components/AuthGate';
 import Onboarding from './pages/Onboarding';
+import Profile from './pages/Profile';
+import MealAnalysis from './pages/MealAnalysis';
+
 
 import { isAuthenticated, logout } from './services/api';
 import './App.css';
@@ -38,6 +41,23 @@ function App() {
               </AuthGate>
             }
           />
+
+          <Route
+            path="/profile"
+            element={
+              <AuthGate>
+                <Profile />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/meal-analysis"
+            element={
+              <AuthGate>
+                <MealAnalysis />
+              </AuthGate>
+            }
+          />
         </Routes>
       </main>
     </div>
@@ -60,6 +80,10 @@ function Nav() {
         <>
           {' | '}
           <Link to="/dashboard">Dashboard</Link>
+          {' | '}
+          <Link to="/meal-analysis">Analyser un repas</Link>
+          {' | '}
+          <Link to="/profile">Mon profil</Link>
         </>
       )}
       {' | '}

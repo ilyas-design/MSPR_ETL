@@ -81,4 +81,24 @@ export async function updateMyProfile(updates) {
   return response.data;
 }
 
+// IA Nutrition
+
+const aiApi = axios.create({
+  baseURL: '/nutrition-api',
+  timeout: 30000,
+});
+
+export async function analyzeMealPhoto(imageFile) {
+  const formData = new FormData();
+  formData.append('file', imageFile);
+
+  const response = await aiApi.post('/analyze', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+}
+
+
 export default api;
