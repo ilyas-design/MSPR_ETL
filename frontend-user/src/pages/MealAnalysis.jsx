@@ -1,12 +1,30 @@
 import { useState } from 'react';
-import { analyzeMealPhoto } from '../services/api';
+import { analyzeMealPhoto, lookupMacros } from '../services/api';
 
 function MealAnalysis() {
+  // Étape courante du workflow : 'upload' | 'select' | 'result'
+  const [step, setStep] = useState('upload');
+
+  // Fichier + preview
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [predictions, setPredictions] = useState(null);
+
+  // Résultats de /analyze (5 prédictions Food-101)
+  const [predictions, setPredictions] = useState([]);
+
+  // Labels que l'user a cochés (Set pour éviter doublons)
+  const [selectedLabels, setSelectedLabels] = useState(new Set());
+
+  // Résultat de /macros/lookup
+  const [lookupResult, setLookupResult] = useState(null);
+
+  // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // ----------------------------------------------------------------
+  // Handlers
+  // ----------------------------------------------------------------
 
   const handleFileChange = (event) => {
     const selected = event.target.files?.[0];
@@ -17,7 +35,6 @@ function MealAnalysis() {
     }
     setFile(selected);
     setPreview(URL.createObjectURL(selected));
-    setPredictions(null);
     setError('');
   };
 
@@ -28,11 +45,12 @@ function MealAnalysis() {
     }
     setError('');
     setLoading(true);
-    setPredictions(null);
-
     try {
       const results = await analyzeMealPhoto(file);
       setPredictions(results);
+      // On pré-coche la 1ère prédiction (la + confiante) pour guider l'user
+      setSelectedLabels(new Set(results.length > 0 ? [results[0].label] : []));
+      setStep('select');
     } catch (err) {
       if (err.code === 'ECONNABORTED') {
         setError('L\'analyse a pris trop de temps. Réessaie.');
@@ -46,106 +64,254 @@ function MealAnalysis() {
     }
   };
 
+  const toggleLabel = (label) => {
+    setSelectedLabels((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+  };
+
+  const handleCalculate = async () => {
+    if (selectedLabels.size === 0) {
+      setError('Coche au moins un aliment.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const labels = Array.from(selectedLabels);
+      const result = await lookupMacros(labels);
+      setLookupResult(result);
+      setStep('result');
+    } catch (err) {
+      setError('Erreur lors du calcul des macros. Réessaie.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleReset = () => {
+    setStep('upload');
     setFile(null);
     setPreview(null);
-    setPredictions(null);
+    setPredictions([]);
+    setSelectedLabels(new Set());
+    setLookupResult(null);
     setError('');
   };
+
+  // ----------------------------------------------------------------
+  // Rendu
+  // ----------------------------------------------------------------
 
   return (
     <section className="meal-analysis-page">
       <h2>Analyser un repas</h2>
-      <p>Prends ou choisis une photo de ton assiette pour identifier les aliments et estimer les macros.</p>
 
-      {!preview && (
-        <div className="upload-zone">
-          <label htmlFor="meal-photo" className="upload-label">
-            <span className="upload-icon" aria-hidden="true">📷</span>
-            <span>Cliquer pour choisir une photo</span>
-            <small>JPG, PNG · max 10 Mo</small>
-          </label>
-          <input
-            id="meal-photo"
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="upload-input"
-          />
-        </div>
-      )}
-
-      {preview && (
-        <div className="preview-section">
-          <img src={preview} alt="Aperçu du repas sélectionné" className="meal-preview" />
-          <div className="preview-actions">
-            <button type="button" onClick={handleAnalyze} disabled={loading}>
-              {loading ? 'Analyse en cours…' : '🔍 Analyser ce repas'}
-            </button>
-            <button type="button" onClick={handleReset} disabled={loading} className="button-secondary">
-              Changer de photo
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Stepper visuel */}
+      <ol className="stepper" aria-label="Progression">
+        <li className={step === 'upload' ? 'active' : 'done'}>1. Photo</li>
+        <li className={step === 'select' ? 'active' : step === 'result' ? 'done' : ''}>
+          2. Vérification
+        </li>
+        <li className={step === 'result' ? 'active' : ''}>3. Résultats</li>
+      </ol>
 
       {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
+        <p className="form-error" role="alert">{error}</p>
       )}
 
-      {loading && (
-        <p role="status" className="loading-message">
-          L'IA analyse ton repas, ça prend quelques secondes…
-        </p>
+      {/* ============ ÉTAPE 1 — UPLOAD ============ */}
+      {step === 'upload' && (
+        <>
+          <p>Prends ou choisis une photo de ton assiette.</p>
+
+          {!preview && (
+            <div className="upload-zone">
+              <label htmlFor="meal-photo" className="upload-label">
+                <span className="upload-icon" aria-hidden="true">📷</span>
+                <span>Cliquer pour choisir une photo</span>
+                <small>JPG, PNG · max 10 Mo</small>
+              </label>
+              <input
+                id="meal-photo"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="upload-input"
+              />
+            </div>
+          )}
+
+          {preview && (
+            <div className="preview-section">
+              <img src={preview} alt="Aperçu du repas" className="meal-preview" />
+              <div className="preview-actions">
+                <button type="button" onClick={handleAnalyze} disabled={loading}>
+                  {loading ? 'Analyse en cours…' : '🔍 Analyser ce repas'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  disabled={loading}
+                  className="button-secondary"
+                >
+                  Changer de photo
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {predictions && predictions.length > 0 && (
-        <section aria-live="polite" className="results-section">
-          <h3>Résultats — Top 5 prédictions</h3>
-          <ol className="predictions-list">
-            {predictions.map((pred, index) => (
-              <li key={index} className="prediction-card">
+      {/* ============ ÉTAPE 2 — SÉLECTION ============ */}
+      {step === 'select' && (
+        <>
+          <p>
+            L'IA a identifié ces aliments. <strong>Coche ceux qui sont vraiment dans
+            ton assiette</strong>, puis lance le calcul.
+          </p>
+
+          {preview && (
+            <img src={preview} alt="Aperçu du repas" className="meal-preview small" />
+          )}
+
+          <fieldset className="predictions-fieldset">
+            <legend>Prédictions de l'IA (Top 5)</legend>
+            <ul className="predictions-list">
+              {predictions.map((pred) => {
+                const isChecked = selectedLabels.has(pred.label);
+                const inFoodLog = Boolean(pred.macros);
+                return (
+                  <li key={pred.label} className="prediction-row">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleLabel(pred.label)}
+                      />
+                      <span className="prediction-name">
+                        {pred.matched_food || pred.label.replace(/_/g, ' ')}
+                      </span>
+                      <span className="prediction-score">
+                        {Math.round(pred.score * 100)}%
+                      </span>
+                      {inFoodLog && (
+                        <span className="badge badge-success" title="Macros déjà dans la base food_log">
+                          ✓ food_log
+                        </span>
+                      )}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </fieldset>
+
+          <div className="preview-actions">
+            <button
+              type="button"
+              onClick={handleCalculate}
+              disabled={loading || selectedLabels.size === 0}
+            >
+              {loading ? 'Calcul en cours…' : `Calculer mes calories (${selectedLabels.size})`}
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={loading}
+              className="button-secondary"
+            >
+              Recommencer
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ============ ÉTAPE 3 — RÉSULTATS ============ */}
+      {step === 'result' && lookupResult && (
+        <>
+          <div className="total-card" aria-live="polite">
+            <h3>Total estimé pour ce repas</h3>
+            <p className="total-calories">
+              {lookupResult.total.calories} <span>kcal</span>
+            </p>
+            <dl className="macros-grid">
+              <div>
+                <dt>Protéines</dt>
+                <dd>{lookupResult.total.protein} g</dd>
+              </div>
+              <div>
+                <dt>Glucides</dt>
+                <dd>{lookupResult.total.carbohydrates} g</dd>
+              </div>
+              <div>
+                <dt>Lipides</dt>
+                <dd>{lookupResult.total.fat} g</dd>
+              </div>
+            </dl>
+            <p className="muted">
+              Calculé sur {lookupResult.total.items_count} aliment
+              {lookupResult.total.items_count > 1 ? 's' : ''}.
+            </p>
+          </div>
+
+          <h4>Détail par aliment</h4>
+          <ul className="predictions-list">
+            {lookupResult.items.map((item) => (
+              <li key={item.label} className="prediction-card">
                 <div className="prediction-header">
                   <span className="prediction-label">
-                    {pred.matched_food || pred.label.replace(/_/g, ' ')}
+                    {item.matched_name || item.pretty_label}
                   </span>
-                  <span className="prediction-score">
-                    {Math.round(pred.score * 100)}%
-                  </span>
+                  {item.source && (
+                    <span className={`badge badge-${item.source}`}>
+                      {item.source === 'food_log' ? 'food_log' : 'USDA'}
+                    </span>
+                  )}
                 </div>
-                {pred.macros ? (
+                {item.macros ? (
                   <dl className="macros-grid">
                     <div>
                       <dt>Calories</dt>
-                      <dd>{pred.macros.avg_calories} kcal</dd>
+                      <dd>{item.macros.avg_calories} kcal</dd>
                     </div>
                     <div>
                       <dt>Protéines</dt>
-                      <dd>{pred.macros.avg_protein} g</dd>
+                      <dd>{item.macros.avg_protein} g</dd>
                     </div>
                     <div>
                       <dt>Glucides</dt>
-                      <dd>{pred.macros.avg_carbohydrates} g</dd>
+                      <dd>{item.macros.avg_carbohydrates} g</dd>
                     </div>
                     <div>
                       <dt>Lipides</dt>
-                      <dd>{pred.macros.avg_fat} g</dd>
+                      <dd>{item.macros.avg_fat} g</dd>
                     </div>
                   </dl>
                 ) : (
-                  <p className="no-macros">Macros non disponibles pour cet aliment.</p>
+                  <p className="no-macros">
+                    Aucune donnée nutritionnelle trouvée pour cet aliment.
+                  </p>
                 )}
               </li>
             ))}
-          </ol>
-        </section>
+          </ul>
+
+          <div className="preview-actions">
+            <button type="button" onClick={handleReset}>
+              📷 Nouvelle analyse
+            </button>
+          </div>
+        </>
       )}
     </section>
   );
 }
 
 export default MealAnalysis;
-
-

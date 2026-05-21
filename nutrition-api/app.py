@@ -11,8 +11,14 @@ from fastapi.responses import JSONResponse
 from PIL import Image
 from pydantic import BaseModel
 from transformers import pipeline
+import httpx
 
 DB_PATH = os.getenv("NUTRITION_API_DB_PATH", "/data/mspr_etl.db")
+USDA_API_KEY = os.getenv("USDA_API_KEY")
+USDA_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
+
+_usda_cache: dict = {}
+
 
 _classifier = None
 
@@ -271,3 +277,178 @@ def generate_meal_plan(req: MealPlanRequest):
         total_calories=round(total_cal, 1),
         total_protein=round(total_prot, 1),
     )
+
+# ---------------------------------------------------------------------------
+# AI — macros lookup (cascade food_log → USDA)
+# ---------------------------------------------------------------------------
+
+class MacrosLookupRequest(BaseModel):
+    labels: list[str]
+
+
+class MacrosLookupItem(BaseModel):
+    label: str
+    pretty_label: str
+    source: Optional[str]          # "food_log" | "usda" | None
+    matched_name: Optional[str]
+    macros: Optional[dict]
+
+
+class MacrosLookupTotal(BaseModel):
+    calories: float
+    protein: float
+    carbohydrates: float
+    fat: float
+    items_count: int
+
+
+class MacrosLookupResponse(BaseModel):
+    items: list[MacrosLookupItem]
+    total: MacrosLookupTotal
+
+
+async def _lookup_usda(label: str) -> tuple[Optional[str], Optional[dict]]:
+    """
+    Cherche un aliment sur USDA FoodData Central.
+    Filtre dataType=Foundation/SR Legacy/Survey FNDDS pour avoir des valeurs
+    par 100 g (et pas par portion industrielle des produits "Branded").
+    """
+    if not USDA_API_KEY:
+        return None, None
+
+    if label in _usda_cache:
+        cached = _usda_cache[label]
+        return cached if cached else (None, None)
+
+    query = label.replace("_", " ").replace("-", " ").strip()
+
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(
+                USDA_SEARCH_URL,
+                params={
+                    "query": query,
+                    "api_key": USDA_API_KEY,
+                    "pageSize": 1,
+                    "dataType": ["Foundation", "SR Legacy", "Survey (FNDDS)"],
+                },
+            )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        _usda_cache[label] = None
+        return None, None
+
+    foods = data.get("foods") or []
+    if not foods:
+        _usda_cache[label] = None
+        return None, None
+
+    food = foods[0]
+    matched_name = food.get("description") or query
+
+    nutrient_map = {
+        "208": "calories",        # Energy (kcal)
+        "203": "protein",         # Protein (g)
+        "205": "carbohydrates",   # Carbohydrate, by difference (g)
+        "204": "fat",             # Total lipid / fat (g)
+    }
+    macros = {
+        "avg_calories": 0.0,
+        "avg_protein": 0.0,
+        "avg_carbohydrates": 0.0,
+        "avg_fat": 0.0,
+    }
+    for n in food.get("foodNutrients", []):
+        number = str(n.get("nutrientNumber", ""))
+        if number in nutrient_map:
+            value = n.get("value") or 0.0
+            macros[f"avg_{nutrient_map[number]}"] = round(float(value), 2)
+
+    _usda_cache[label] = (matched_name, macros)
+    return matched_name, macros
+
+
+@app.post("/macros/lookup", response_model=MacrosLookupResponse)
+async def lookup_macros(req: MacrosLookupRequest):
+    """
+    Pour chaque label coché par l'utilisateur, cascade :
+      1) food_log (fuzzy match sur la BDD ETL locale)
+      2) USDA FoodData Central (fallback externe)
+      3) null si rien trouvé
+
+    Renvoie aussi le total agrégé pour les items dont les macros ont été trouvées.
+    """
+    # Charge food_log une seule fois
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT
+                food_item,
+                ROUND(AVG(calories_kcal), 1)   AS avg_calories,
+                ROUND(AVG(protein_g), 2)        AS avg_protein,
+                ROUND(AVG(carbohydrates_g), 2)  AS avg_carbohydrates,
+                ROUND(AVG(fat_g), 2)            AS avg_fat
+            FROM food_log
+            GROUP BY food_item
+        """).fetchall()
+    food_map = {row["food_item"].lower(): dict(row) for row in rows}
+
+    items: list[MacrosLookupItem] = []
+    total_cal = total_prot = total_carb = total_fat = 0.0
+    items_count = 0
+
+    for raw_label in req.labels:
+        label = raw_label.strip()
+        if not label:
+            continue
+        pretty = label.replace("_", " ").replace("-", " ").title()
+
+        # 1) food_log
+        matched, food_data = _fuzzy_match(label, food_map)
+        macros = None
+        source = None
+        if food_data:
+            macros = {
+                "avg_calories": food_data["avg_calories"],
+                "avg_protein": food_data["avg_protein"],
+                "avg_carbohydrates": food_data["avg_carbohydrates"],
+                "avg_fat": food_data["avg_fat"],
+            }
+            source = "food_log"
+
+        # 2) USDA fallback
+        if not macros:
+            usda_name, usda_macros = await _lookup_usda(label)
+            if usda_macros:
+                matched = usda_name
+                macros = usda_macros
+                source = "usda"
+
+        if macros:
+            total_cal += macros.get("avg_calories") or 0.0
+            total_prot += macros.get("avg_protein") or 0.0
+            total_carb += macros.get("avg_carbohydrates") or 0.0
+            total_fat += macros.get("avg_fat") or 0.0
+            items_count += 1
+
+        items.append(MacrosLookupItem(
+            label=label,
+            pretty_label=pretty,
+            source=source,
+            matched_name=matched,
+            macros=macros,
+        ))
+
+    return MacrosLookupResponse(
+        items=items,
+        total=MacrosLookupTotal(
+            calories=round(total_cal, 1),
+            protein=round(total_prot, 2),
+            carbohydrates=round(total_carb, 2),
+            fat=round(total_fat, 2),
+            items_count=items_count,
+        ),
+    )
+
+
+

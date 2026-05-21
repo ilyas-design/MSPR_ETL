@@ -100,5 +100,13 @@ export async function analyzeMealPhoto(imageFile) {
   return response.data;
 }
 
+export async function lookupMacros(labels) {
+  const response = await aiApi.post('/macros/lookup', { labels });
+  return response.data;
+}
+
+
+
+
 
 export default api;
