@@ -7,9 +7,14 @@ from api.views import (
     ActivitePhysiqueViewSet,
     GymSessionViewSet,
     PendingChangeViewSet,
+    FoodLogViewSet,
+    ExerciseViewSet,
+    MealEntryViewSet,
     MeView,
     RegisterView,
     UserProfileView,
+    AIAnalyzeView,
+    AIMealPlanView,
     KPIView,
     EngagementKPIView,
     ConversionKPIView,
@@ -28,12 +33,19 @@ router.register(r'nutrition', NutritionViewSet)
 router.register(r'activite-physique', ActivitePhysiqueViewSet)
 router.register(r'gym-sessions', GymSessionViewSet)
 router.register(r'pending-changes', PendingChangeViewSet, basename='pending-changes')
+router.register(r'food-logs', FoodLogViewSet, basename='food-logs')
+router.register(r'exercises', ExerciseViewSet, basename='exercises')
+router.register(r'me/meals', MealEntryViewSet, basename='me-meals')
 
 urlpatterns = [
     path('api/', include(router.urls)),
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/me/', MeView.as_view(), name='me'),
+    path('api/auth/register/', RegisterView.as_view(), name='register'),
+    path('api/me/profile/', UserProfileView.as_view(), name='me-profile'),
+    path('api/ai/analyze/', AIAnalyzeView.as_view(), name='ai-analyze'),
+    path('api/ai/meal-plan/', AIMealPlanView.as_view(), name='ai-meal-plan'),
     path('api/kpis/', KPIView.as_view(), name='kpis'),
     path('api/engagement/', EngagementKPIView.as_view(), name='engagement-kpis'),
     path('api/conversion/', ConversionKPIView.as_view(), name='conversion-kpis'),

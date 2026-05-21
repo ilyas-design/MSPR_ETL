@@ -40,6 +40,41 @@ services:
       - sqlite_data:/data
     restart: "no"
 
+  app-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: healthai
+      POSTGRES_USER: healthai
+      POSTGRES_PASSWORD: healthai
+    volumes:
+      - app_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "healthai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  nutrition-api:
+    build:
+      context: ./nutrition-api
+    volumes:
+      - sqlite_data:/data
+    environment:
+      - NUTRITION_API_DB_PATH=/data/mspr_etl.db
+    expose:
+      - "8001"
+    depends_on:
+      etl:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -49,11 +84,20 @@ services:
       - SECRET_KEY=${SECRET_KEY:-django-insecure-changeme-in-production}
       - DEBUG=${DEBUG:-False}
       - DB_PATH=/data/mspr_etl.db
+      - POSTGRES_HOST=app-postgres
+      - POSTGRES_DB=healthai
+      - POSTGRES_USER=healthai
+      - POSTGRES_PASSWORD=healthai
+      - NUTRITION_API_URL=http://nutrition-api:8001
     expose:
       - "8000"
     depends_on:
       etl:
         condition: service_completed_successfully
+      app-postgres:
+        condition: service_healthy
+      nutrition-api:
+        condition: service_healthy
 
   frontend:
     build:
@@ -111,7 +155,7 @@ services:
     <<: *airflow-common
     command: api-server
     ports:
-      - "8080:8080"
+      - "8081:8080"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
       interval: 30s
@@ -164,3 +208,4 @@ services:
 volumes:
   sqlite_data:
   airflow_postgres_data:
+  app_postgres_data:

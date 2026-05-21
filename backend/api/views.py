@@ -1,12 +1,21 @@
+import hashlib
+
+import httpx
+from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.db import transaction
 from django.db.models import Avg, Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import status, viewsets
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
+from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -14,7 +23,10 @@ from .filter_backends import PatientSearchFilter
 
 from .models import (
     ActivitePhysique,
+    Exercise,
+    FoodLog,
     GymSession,
+    MealEntry,
     Nutrition,
     Patient,
     PendingChange,
@@ -24,7 +36,10 @@ from .models import (
 from .permissions import IsSupervisor, is_supervisor
 from .serializers import (
     ActivitePhysiqueSerializer,
+    ExerciseSerializer,
+    FoodLogSerializer,
     GymSessionSerializer,
+    MealEntrySerializer,
     NutritionSerializer,
     PatientSerializer,
     PendingChangeSerializer,
@@ -550,3 +565,185 @@ class UserProfileView(APIView):
 
       
     
+# ---------------------------------------------------------------------------
+# Data ViewSets — ETL tables (read-only, SQLite via db_router)
+# ---------------------------------------------------------------------------
+
+class FoodLogViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = FoodLog.objects.all().order_by('food_item')
+    serializer_class = FoodLogSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ('food_item', 'category', 'meal_type')
+    ordering_fields = ('food_item', 'calories_kcal', 'protein_g', 'category')
+    ordering = ('food_item',)
+
+
+class ExerciseViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Exercise.objects.all().order_by('name')
+    serializer_class = ExerciseSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ('name', 'body_part', 'target', 'level', 'equipment')
+    ordering_fields = ('name', 'body_part', 'level')
+    ordering = ('name',)
+
+
+# ---------------------------------------------------------------------------
+# User layer — registration, profile, meal history (PostgreSQL)
+# ---------------------------------------------------------------------------
+
+class RegisterView(generics.CreateAPIView):
+    """POST /api/auth/register/ — creates User + UserProfile atomically."""
+
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        User = get_user_model()
+        username = request.data.get('username')
+        password = request.data.get('password')
+        if not username or not password:
+            return Response(
+                {'detail': 'username and password are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if User.objects.filter(username=username).exists():
+            return Response(
+                {'detail': 'Username already taken.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        profile_data = {
+            'goal': request.data.get('goal', 'maintenance'),
+            'daily_calorie_target': request.data.get('daily_calorie_target'),
+            'allergies': request.data.get('allergies', []),
+            'dietary_restrictions': request.data.get('dietary_restrictions', []),
+            'equipment_available': request.data.get('equipment_available', []),
+            'experience_level': request.data.get('experience_level'),
+        }
+
+        with transaction.atomic():
+            user = User.objects.create_user(username=username, password=password)
+            profile = UserProfile.objects.create(user=user, **profile_data)
+
+        return Response(
+            {'username': user.username, 'profile': UserProfileSerializer(profile).data},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class UserProfileView(generics.RetrieveUpdateAPIView):
+    """GET/PATCH /api/me/profile/ — returns or updates the current user's profile."""
+
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        profile, _ = UserProfile.objects.get_or_create(user=self.request.user)
+        return profile
+
+
+class MealEntryViewSet(viewsets.ModelViewSet):
+    """GET/POST /api/me/meals/ — list or create meal entries for the current user."""
+
+    serializer_class = MealEntrySerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+    filter_backends = [OrderingFilter]
+    ordering_fields = ('analyzed_at', 'total_calories')
+    ordering = ('-analyzed_at',)
+
+    def get_queryset(self):
+        return MealEntry.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+# ---------------------------------------------------------------------------
+# AI proxy views — forward to nutrition-api microservice
+# ---------------------------------------------------------------------------
+
+NUTRITION_API_URL = getattr(django_settings, 'NUTRITION_API_URL', 'http://nutrition-api:8001')
+
+
+@method_decorator(ratelimit(key='user', rate='10/m', method='POST', block=True), name='dispatch')
+class AIAnalyzeView(APIView):
+    """
+    POST /api/ai/analyze/
+    Accepts a multipart image. Computes SHA-256 of the bytes for a 1-hour cache key,
+    then proxies to nutrition-api/analyze. Persists a MealEntry on success.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        image_file = request.FILES.get('file')
+        if not image_file:
+            return Response({'detail': 'No file uploaded.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        image_bytes = image_file.read()
+        cache_key = 'ai_analyze_' + hashlib.sha256(image_bytes).hexdigest()
+
+        cached = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
+        try:
+            resp = httpx.post(
+                f'{NUTRITION_API_URL}/analyze',
+                files={'file': (image_file.name, image_bytes, image_file.content_type)},
+                timeout=60.0,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            return Response(
+                {'detail': f'AI service unavailable: {exc}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        data = resp.json()
+        cache.set(cache_key, data, timeout=3600)
+
+        total_calories = sum(
+            (p.get('macros') or {}).get('avg_calories') or 0
+            for p in data
+            if p.get('matched_food')
+        )
+        MealEntry.objects.create(
+            user=request.user,
+            detected_foods=data,
+            total_calories=total_calories or None,
+            image_hash=hashlib.sha256(image_bytes).hexdigest(),
+        )
+
+        return Response(data)
+
+
+@method_decorator(ratelimit(key='user', rate='20/m', method='POST', block=True), name='dispatch')
+class AIMealPlanView(APIView):
+    """
+    POST /api/ai/meal-plan/
+    Proxies to nutrition-api/meal-plan with the request JSON body.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            resp = httpx.post(
+                f'{NUTRITION_API_URL}/meal-plan',
+                json=request.data,
+                timeout=30.0,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            return Response(
+                {'detail': f'AI service unavailable: {exc}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(resp.json())
