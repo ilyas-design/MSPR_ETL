@@ -6,6 +6,7 @@ from .models import (
     ActivitePhysique,
     GymSession,
     PendingChange,
+    UserProfile,
 )
 
 class PatientSerializer(serializers.ModelSerializer):
@@ -69,4 +70,27 @@ class PendingChangeSerializer(serializers.ModelSerializer):
             "reviewed_by_username",
             "reviewed_at",
         ]
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    bmi = serializers.ReadOnlyField()
+    class Meta:
+        model = UserProfile
+        fields = [
+            'goal',
+            'experience_level',
+            'dietary_restrictions',
+            'allergies',
+            'equipment_available',
+            'daily_calorie_target',
+            'age',
+            'gender',
+            'height_cm',
+            'weight_kg',
+            'target_weight_kg',
+            'bmi',
+            'onboarded',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'bmi']
 

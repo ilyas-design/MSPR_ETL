@@ -19,6 +19,7 @@ from .models import (
     Patient,
     PendingChange,
     Sante,
+    UserProfile,
 )
 from .permissions import IsSupervisor, is_supervisor
 from .serializers import (
@@ -28,6 +29,7 @@ from .serializers import (
     PatientSerializer,
     PendingChangeSerializer,
     SanteSerializer,
+    UserProfileSerializer,
 )
 
 
@@ -459,3 +461,92 @@ class DataQualityKPIView(APIView):
 
 # Ré-exporté pour les tests : permet de patcher `get_user_model` si besoin.
 _User = get_user_model()
+
+
+# Inscription utilisateur 
+
+from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+
+
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        username= (request.data.get('username') or '').strip()
+        email = (request.data.get('email') or '').strip() or username
+        password = request.data.get('password') or ''
+
+        if not username:
+            return Response(
+                {'detail': 'Username is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        if len(password) < 8:
+            return Response(
+                {'detail': 'Password must be at least 8 characters long.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        User = get_user_model()
+        if User.objects.filter(username=username).exists():
+            return Response(
+                {'detail': 'Username already exists.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        try: 
+            validate_password(password)
+        except DjangoValidationError as exc:
+            return Response(
+                {'detail': exc.messages},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+
+        user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+            )
+
+
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+    
+
+
+
+
+class UserProfileView(APIView):
+
+    def _get_profile(self, user):
+        # get_or_create pour gérer les vieux users qui n'ont pas de profil
+        # (créés avant l'ajout de UserProfile)
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        return profile
+    
+    def get(self, request):
+        profile = self._get_profile(request.user)
+        serializer = UserProfileSerializer(profile)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        profile = self._get_profile(request.user)
+        serializer = UserProfileSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+      
+    

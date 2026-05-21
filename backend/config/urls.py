@@ -8,11 +8,14 @@ from api.views import (
     GymSessionViewSet,
     PendingChangeViewSet,
     MeView,
+    RegisterView,
+    UserProfileView,
     KPIView,
     EngagementKPIView,
     ConversionKPIView,
     SatisfactionKPIView,
     DataQualityKPIView,
+
 )
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -39,4 +42,6 @@ urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path('api/auth/register/', RegisterView.as_view(), name='register'),
+    path('api/me/profile/', UserProfileView.as_view(), name='user-profile'),
 ]

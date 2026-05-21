@@ -147,3 +147,71 @@ class PendingChange(models.Model):
     def __str__(self):
         return f"PendingChange#{self.pk} {self.table_name}/{self.record_id} ({self.status})"
 
+
+#Profil utilisateur 
+
+class UserProfile(models.Model):
+
+    class Goal(models.TextChoices):
+        WEIGHT_LOSS = 'weight_loss', 'Perdre du poids'
+        MUSCLE_GAIN = 'muscle_gain', 'Prendre du muscle'
+        ENDURANCE = 'endurance', 'Améliorer mon endurance'
+        GENERAL_HEALTH = 'general_health', 'Maintenir ma forme'
+
+    class ExperienceLevel(models.TextChoices):
+        BEGINNER = 'beginner', 'Débutant'
+        INTERMEDIATE = 'intermediate', 'Intermédiaire'
+        ADVANCED = 'advanced', 'Avancé'
+
+    class DietaryRestriction(models.TextChoices):
+        NONE = 'none', 'Aucune'
+        VEGETARIAN = 'vegetarian', 'Végétarien'
+        VEGAN = 'vegan', 'Végan'
+        GLUTEN_FREE = 'gluten_free', 'Sans gluten'
+        LACTOSE_FREE = 'lactose_free', 'Sans lactose'
+
+    class Gender(models.TextChoices):
+        MALE = 'M', 'Homme'
+        FEMALE = 'F', 'Femme'
+        OTHER = 'O', 'Autre / Préfère ne pas dire'
+
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='profile',
+    )
+    goal = models.CharField(max_length=30, choices=Goal.choices, blank=True)
+    experience_level = models.CharField(max_length=20, choices=ExperienceLevel.choices, blank=True)
+    dietary_restrictions = models.CharField(
+        max_length=20,
+        choices=DietaryRestriction.choices,
+        default=DietaryRestriction.NONE,
+    )
+    allergies = models.TextField(blank=True, help_text='Allergies séparées par virgules')
+    equipment_available = models.TextField(blank=True, help_text='Équipement séparé par virgules')
+    daily_calorie_target = models.PositiveIntegerField(null=True, blank=True)
+    age = models.PositiveIntegerField(null=True, blank=True)
+    gender = models.CharField(max_length=1, choices=Gender.choices, blank=True)
+    height_cm = models.PositiveSmallIntegerField(null=True, blank=True)
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    target_weight_kg = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True) 
+    onboarded = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_profile'
+
+    @property
+
+    def bmi(self):
+        if self.height_cm and self.weight_kg:
+            height_m = self.height_cm / 100
+            return round(float(self.weight_kg) / (height_m ** 2), 1)
+        return None
+
+    def __str__(self):
+        return f"Profile of {self.user.username}"
+    
+    
