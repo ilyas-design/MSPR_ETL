@@ -807,3 +807,226 @@ class AIMealPlanView(APIView):
             )
 
         return Response(resp.json())
+
+
+# ---------------------------------------------------------------------------
+# Recommandations nutritionnelles personnalisées (chantier 1 MSPR2)
+# ---------------------------------------------------------------------------
+
+def _compute_targets(profile):
+    """
+    Calcule les cibles journalières selon la formule Mifflin-St Jeor + ajustement objectif.
+    Si l'user n'a pas renseigné assez de données biométriques, on tombe back sur
+    profile.daily_calorie_target ou 2000 kcal par défaut.
+    """
+    has_biometrics = (
+        profile.weight_kg
+        and profile.height_cm
+        and profile.age
+    )
+
+    if has_biometrics:
+        weight = float(profile.weight_kg)
+        height = float(profile.height_cm)
+        age = profile.age
+        # Mifflin-St Jeor (BMR)
+        if profile.gender == 'F':
+            bmr = 10 * weight + 6.25 * height - 5 * age - 161
+        else:
+            bmr = 10 * weight + 6.25 * height - 5 * age + 5
+        # Facteur d'activité moyen (sédentaire-léger)
+        tdee = bmr * 1.4
+        # Ajustement selon objectif
+        if profile.goal == 'weight_loss':
+            calorie_target = tdee - 500
+        elif profile.goal == 'muscle_gain':
+            calorie_target = tdee + 300
+        else:
+            calorie_target = tdee
+    else:
+        calorie_target = profile.daily_calorie_target or 2000
+
+    # Si l'user a fixé sa propre cible, on la respecte
+    if profile.daily_calorie_target:
+        calorie_target = profile.daily_calorie_target
+
+    # Répartition macros selon objectif (en % des calories)
+    if profile.goal == 'weight_loss':
+        pct = {'protein': 0.35, 'carbohydrates': 0.35, 'fat': 0.30}
+    elif profile.goal == 'muscle_gain':
+        pct = {'protein': 0.30, 'carbohydrates': 0.45, 'fat': 0.25}
+    elif profile.goal == 'endurance':
+        pct = {'protein': 0.20, 'carbohydrates': 0.55, 'fat': 0.25}
+    else:
+        pct = {'protein': 0.25, 'carbohydrates': 0.50, 'fat': 0.25}
+
+    return {
+        'calories': round(calorie_target),
+        'protein': round(calorie_target * pct['protein'] / 4, 1),   # 4 kcal/g
+        'carbohydrates': round(calorie_target * pct['carbohydrates'] / 4, 1),
+        'fat': round(calorie_target * pct['fat'] / 9, 1),           # 9 kcal/g
+    }
+
+
+def _detect_imbalances(totals, targets):
+    """Pour chaque nutriment, calcule % de la cible et tag deficit/excess/ok."""
+    imbalances = []
+    for nutrient in ['calories', 'protein', 'carbohydrates', 'fat']:
+        eaten = totals.get(nutrient, 0) or 0
+        target = targets.get(nutrient, 0) or 0
+        if target == 0:
+            continue
+        pct = (eaten / target) * 100
+        if pct < 70:
+            status = 'deficit'
+        elif pct > 115:
+            status = 'excess'
+        else:
+            status = 'ok'
+        imbalances.append({
+            'nutrient': nutrient,
+            'eaten': round(eaten, 1),
+            'target': target,
+            'percentage': round(pct, 1),
+            'status': status,
+        })
+    return imbalances
+
+
+def _generate_suggestions(profile, totals, imbalances):
+    """
+    Règles métier : croise objectif user + déséquilibres détectés pour produire
+    des conseils actionnables. Triés par priorité.
+    """
+    suggestions = []
+
+    if totals.get('meals_count', 0) == 0:
+        suggestions.append({
+            'priority': 'high',
+            'icon': '📷',
+            'title': "Tu n'as encore rien enregistré aujourd'hui",
+            'detail': "Va sur « Analyser un repas » dès ton prochain repas pour suivre tes apports.",
+        })
+
+    for imb in imbalances:
+        if imb['status'] == 'ok':
+            continue
+
+        nutrient = imb['nutrient']
+        status = imb['status']
+        gap = abs(imb['eaten'] - imb['target'])
+
+        if nutrient == 'calories' and status == 'deficit':
+            if profile.goal == 'muscle_gain':
+                suggestions.append({
+                    'priority': 'high',
+                    'icon': '⚠️',
+                    'title': f"Il te manque ~{round(gap)} kcal aujourd'hui",
+                    'detail': "Pour ta prise de muscle, ajoute une collation : 30 g d'amandes (180 kcal) ou un yogourt grec + miel (250 kcal).",
+                })
+            else:
+                suggestions.append({
+                    'priority': 'medium',
+                    'icon': '🍽️',
+                    'title': f"Tu n'as mangé que {round(imb['percentage'])}% de ta cible calorique",
+                    'detail': "Pense à un dernier repas équilibré si tu as encore faim.",
+                })
+
+        elif nutrient == 'calories' and status == 'excess':
+            if profile.goal == 'weight_loss':
+                suggestions.append({
+                    'priority': 'high',
+                    'icon': '⚠️',
+                    'title': f"+{round(gap)} kcal au-dessus de ta cible",
+                    'detail': "Privilégie demain des aliments à faible densité calorique : légumes, fruits, protéines maigres.",
+                })
+            else:
+                suggestions.append({
+                    'priority': 'low',
+                    'icon': '👀',
+                    'title': "Léger excès calorique aujourd'hui",
+                    'detail': "Pas de panique sur une journée, surveille la moyenne sur la semaine.",
+                })
+
+        elif nutrient == 'protein' and status == 'deficit':
+            suggestions.append({
+                'priority': 'high' if profile.goal in ('muscle_gain', 'weight_loss') else 'medium',
+                'icon': '💪',
+                'title': f"Il te manque ~{round(gap)} g de protéines",
+                'detail': "Ajoute des œufs (12 g/œuf), du fromage blanc 0% (10 g/100g), du poulet (25 g/100g) ou des lentilles (9 g/100g).",
+            })
+
+        elif nutrient == 'carbohydrates' and status == 'deficit' and profile.goal == 'endurance':
+            suggestions.append({
+                'priority': 'high',
+                'icon': '🏃',
+                'title': "Tes glucides sont bas pour un objectif endurance",
+                'detail': "Tu auras du mal à tenir ton entraînement. Ajoute du riz complet, des pâtes ou de la patate douce.",
+            })
+
+        elif nutrient == 'carbohydrates' and status == 'excess' and profile.goal == 'weight_loss':
+            suggestions.append({
+                'priority': 'medium',
+                'icon': '🍞',
+                'title': "Apport glucidique élevé pour ton objectif perte de poids",
+                'detail': "Remplace une portion de féculents par des légumes verts ou des protéines maigres.",
+            })
+
+        elif nutrient == 'fat' and status == 'excess':
+            suggestions.append({
+                'priority': 'medium',
+                'icon': '🧈',
+                'title': f"+{round(gap)} g de lipides au-dessus de ta cible",
+                'detail': "Privilégie les bonnes graisses (poisson, huile d'olive, avocat) plutôt que charcuteries ou fritures.",
+            })
+
+    # Tri par priorité
+    priority_order = {'high': 0, 'medium': 1, 'low': 2}
+    suggestions.sort(key=lambda s: priority_order.get(s['priority'], 99))
+
+    return suggestions
+
+
+class RecommendationsTodayView(APIView):
+    """
+    GET /api/me/recommendations/today/
+    Analyse les apports du jour vs cibles personnalisées + suggestions
+    adaptées à l'objectif. C'est le cœur du chantier 1 MSPR2.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = UserProfile.objects.filter(user=request.user).first()
+        if not profile:
+            return Response(
+                {'detail': 'Profil non configuré. Termine ton onboarding.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.utils import timezone
+        today = timezone.localtime().date()
+        meals = MealEntry.objects.filter(user=request.user, analyzed_at__date=today)
+
+        totals = {
+            'calories': sum((m.total_calories or 0) for m in meals),
+            'protein': sum((m.total_protein or 0) for m in meals),
+            'carbohydrates': sum((m.total_carbohydrates or 0) for m in meals),
+            'fat': sum((m.total_fat or 0) for m in meals),
+            'meals_count': meals.count(),
+        }
+
+        targets = _compute_targets(profile)
+        imbalances = _detect_imbalances(totals, targets)
+        suggestions = _generate_suggestions(profile, totals, imbalances)
+
+        return Response({
+            'profile': {
+                'goal': profile.goal,
+                'goal_label': profile.get_goal_display() if profile.goal else 'Non défini',
+            },
+            'totals_today': totals,
+            'targets': targets,
+            'imbalances': imbalances,
+            'suggestions': suggestions,
+        })
+

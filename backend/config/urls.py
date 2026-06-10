@@ -20,6 +20,7 @@ from api.views import (
     ConversionKPIView,
     SatisfactionKPIView,
     DataQualityKPIView,
+    RecommendationsTodayView,
 
 )
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
@@ -56,4 +57,5 @@ urlpatterns = [
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/me/profile/', UserProfileView.as_view(), name='user-profile'),
+    path('api/me/recommendations/today/', RecommendationsTodayView.as_view(), name='recommendations-today'),
 ]

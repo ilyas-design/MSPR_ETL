@@ -7,6 +7,8 @@ import Onboarding from './pages/Onboarding';
 import Profile from './pages/Profile';
 import MealAnalysis from './pages/MealAnalysis';
 import MealHistory from './pages/History';
+import Coach from './pages/Coach';
+import MealPlan from './pages/MealPlan';
 import { isAuthenticated, logout } from './services/api';
 import './App.css';
 
@@ -65,6 +67,22 @@ function App() {
               </AuthGate>
             }
           />
+          <Route
+            path="/coach"
+            element={
+              <AuthGate>
+                <Coach />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/meal-plan"
+            element={
+              <AuthGate>
+                <MealPlan />
+              </AuthGate>
+            }
+          />
         </Routes>
       </main>
     </div>
@@ -89,6 +107,10 @@ function Nav() {
           <Link to="/dashboard">Dashboard</Link>
           {' | '}
           <Link to="/meal-analysis">Analyser un repas</Link>
+          {' | '}
+          <Link to="/coach">Coach</Link>
+          {' | '}
+          <Link to="/meal-plan">Plan de repas</Link>
           {' | '}
           <Link to="/historique">Historique</Link>
           {' | '}

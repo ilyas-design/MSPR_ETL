@@ -205,4 +205,20 @@ export async function deleteMeal(mealId) {
 }
 
 
+// ============================================================
+// Recommandations IA (chantier 1 MSPR2)
+// ============================================================
+
+export async function getRecommendationsToday() {
+  const response = await api.get('/me/recommendations/today/');
+  return response.data;
+}
+
+export async function generateMealPlan(params) {
+  // params = { goal, calorie_target, allergies: [...], restrictions: [...], meals_per_day }
+  const response = await api.post('/ai/meal-plan/', params);
+  return response.data;
+}
+
+
 export default api;

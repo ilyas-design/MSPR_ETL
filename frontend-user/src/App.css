@@ -658,3 +658,196 @@ nav a:hover {
   margin-top: 0.75rem;
 }
 
+
+/* ============================================================
+   Coach — page recommandations
+   ============================================================ */
+
+.balance-section {
+  margin: 1.5rem 0;
+}
+
+.balance-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.balance-row {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.balance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.balance-numbers {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+  color: #495057;
+}
+
+.balance-bar {
+  height: 8px;
+  background: #f1f3f5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.balance-bar-fill {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.suggestions-section {
+  margin-top: 2rem;
+}
+
+.suggestions-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.suggestion-card {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  border: 1px solid #dee2e6;
+  background: #fff;
+}
+
+.suggestion-card.priority-high {
+  border-left: 4px solid #fa5252;
+  background: #fff5f5;
+}
+
+.suggestion-card.priority-medium {
+  border-left: 4px solid #fab005;
+  background: #fff9db;
+}
+
+.suggestion-card.priority-low {
+  border-left: 4px solid #74c0fc;
+  background: #e7f5ff;
+}
+
+.suggestion-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.suggestion-content h4 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.suggestion-content p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+/* ============================================================
+   Plan de repas — page IA
+   ============================================================ */
+
+.meal-plan-form fieldset {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+}
+
+.meal-plan-form legend {
+  font-weight: 600;
+  padding: 0 0.5rem;
+  color: #495057;
+}
+
+.meal-plan-form label {
+  display: block;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.meal-plan-form input,
+.meal-plan-form select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: #fff;
+}
+
+.meal-plan-form input:focus,
+.meal-plan-form select:focus {
+  outline: 2px solid #74c0fc;
+  border-color: #1971c2;
+}
+
+.meal-plan-result {
+  margin-top: 2rem;
+}
+
+.meal-foods-list {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.meal-foods-list li {
+  padding: 0.25rem 0;
+  font-size: 0.92rem;
+}
+
+.button-link {
+  display: inline-block;
+  padding: 0.6rem 1rem;
+  background: #1971c2;
+  color: #fff;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.button-link:hover {
+  background: #1864ab;
+}
+
+/* Récap apports du jour sur la page Plan de repas */
+.today-recap {
+  background: #e7f5ff;
+  border-left: 4px solid #1971c2;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  border-radius: 6px;
+}
+
+.today-recap p {
+  margin: 0 0 0.75rem;
+  color: #1864ab;
+}
+
+.today-recap .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: #1864ab;
+  cursor: pointer;
+}
