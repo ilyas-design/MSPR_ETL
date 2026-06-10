@@ -621,7 +621,7 @@ class RegisterView(generics.CreateAPIView):
             'allergies': request.data.get('allergies', []),
             'dietary_restrictions': request.data.get('dietary_restrictions', []),
             'equipment_available': request.data.get('equipment_available', []),
-            'experience_level': request.data.get('experience_level'),
+            'experience_level': request.data.get('experience_level',''),
         }
 
         with transaction.atomic():
@@ -646,7 +646,7 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
 
 class MealEntryViewSet(viewsets.ModelViewSet):
-    """GET/POST /api/me/meals/ — list or create meal entries for the current user."""
+   
 
     serializer_class = MealEntrySerializer
     permission_classes = [IsAuthenticated]
@@ -659,7 +659,67 @@ class MealEntryViewSet(viewsets.ModelViewSet):
         return MealEntry.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        # Si l'user n'a pas fourni meal_type, on le devine par l'heure
+        meal_type = serializer.validated_data.get('meal_type')
+        if not meal_type:
+            from django.utils import timezone
+            hour = timezone.localtime().hour
+            if 5 <= hour < 11:
+                meal_type = MealEntry.MealType.BREAKFAST
+            elif 11 <= hour < 15:
+                meal_type = MealEntry.MealType.LUNCH
+            elif 18 <= hour < 23:
+                meal_type = MealEntry.MealType.DINNER
+            else:
+                meal_type = MealEntry.MealType.SNACK
+        serializer.save(user=self.request.user, meal_type=meal_type)
+
+    @action(detail=False, methods=['get'])
+    def today(self, request):
+        """Repas du jour pour l'utilisateur courant."""
+        from django.utils import timezone
+        today = timezone.localtime().date()
+        meals = self.get_queryset().filter(analyzed_at__date=today)
+        serializer = self.get_serializer(meals, many=True)
+
+        totals = {
+            'calories': sum((m.total_calories or 0) for m in meals),
+            'protein': sum((m.total_protein or 0) for m in meals),
+            'carbohydrates': sum((m.total_carbohydrates or 0) for m in meals),
+            'fat': sum((m.total_fat or 0) for m in meals),
+            'meals_count': meals.count(),
+        }
+        return Response({'meals': serializer.data, 'totals': totals})
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """
+        Totaux agrégés par jour, sur les 14 derniers jours par défaut.
+        Pour graphiques d'évolution.
+        """
+        from django.utils import timezone
+        from django.db.models import Sum, Count
+        from datetime import timedelta
+
+        days = int(request.query_params.get('days', 14))
+        days = max(1, min(days, 90))  # garde-fou : 1 à 90 jours
+        since = timezone.localtime().date() - timedelta(days=days - 1)
+
+        rows = (
+            self.get_queryset()
+            .filter(analyzed_at__date__gte=since)
+            .extra(select={'day': 'date(analyzed_at)'})
+            .values('day')
+            .annotate(
+                calories=Sum('total_calories'),
+                protein=Sum('total_protein'),
+                carbohydrates=Sum('total_carbohydrates'),
+                fat=Sum('total_fat'),
+                count=Count('id'),
+            )
+            .order_by('day')
+        )
+        return Response(list(rows))
 
 
 # ---------------------------------------------------------------------------

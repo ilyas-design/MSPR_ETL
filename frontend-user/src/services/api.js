@@ -23,6 +23,74 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// ----------------------------------------------------------------
+// Intercepteur de réponse : auto-refresh du token sur 401
+// ----------------------------------------------------------------
+let isRefreshing = false;
+let refreshQueue = [];
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // On ne touche pas aux requêtes qui ne sont pas 401, déjà retentées,
+    // ou qui parlent justement au endpoint token (sinon boucle infinie).
+    if (
+      error.response?.status !== 401 ||
+      originalRequest._retry ||
+      originalRequest.url?.includes('/auth/token')
+    ) {
+      return Promise.reject(error);
+    }
+
+    const refresh = getRefreshToken();
+    if (!refresh) {
+      clearTokens();
+      window.location.href = '/login';
+      return Promise.reject(error);
+    }
+
+    // Si un refresh est déjà en cours, on met cette requête en file d'attente.
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        refreshQueue.push({ resolve, reject, originalRequest });
+      });
+    }
+
+    isRefreshing = true;
+    originalRequest._retry = true;
+
+    try {
+      const response = await axios.post('/api/auth/token/refresh/', { refresh });
+      const newAccess = response.data.access;
+      localStorage.setItem(ACCESS_TOKEN_KEY, newAccess);
+
+      // Rejoue toutes les requêtes mises en attente pendant le refresh.
+      refreshQueue.forEach(({ resolve, originalRequest: req }) => {
+        req.headers.Authorization = `Bearer ${newAccess}`;
+        resolve(api(req));
+      });
+      refreshQueue = [];
+
+      // Rejoue la requête qui a déclenché le refresh.
+      originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+      return api(originalRequest);
+    } catch (refreshError) {
+      // Le refresh token est lui aussi expiré → on force la reconnexion.
+      refreshQueue.forEach(({ reject }) => reject(refreshError));
+      refreshQueue = [];
+      clearTokens();
+      window.location.href = '/login';
+      return Promise.reject(refreshError);
+    } finally {
+      isRefreshing = false;
+    }
+  }
+);
+
+
+
 // ============================================================
 // Helpers de stockage des tokens
 // ============================================================
@@ -107,6 +175,34 @@ export async function lookupMacros(labels) {
 
 
 
+// ============================================================
+// Historique des repas (PostgreSQL via Django)
+// ============================================================
+
+export async function saveMeal(mealData) {
+  // mealData = { detected_foods, total_calories, total_protein, total_carbohydrates, total_fat }
+  const response = await api.post('/me/meals/', mealData);
+  return response.data;
+}
+
+export async function getMyMeals() {
+  const response = await api.get('/me/meals/');
+  return response.data;
+}
+
+export async function getMealsToday() {
+  const response = await api.get('/me/meals/today/');
+  return response.data; // { meals: [...], totals: {calories, protein, ...} }
+}
+
+export async function getMealsSummary(days = 14) {
+  const response = await api.get(`/me/meals/summary/?days=${days}`);
+  return response.data; // [{day, calories, protein, ...}, ...]
+}
+
+export async function deleteMeal(mealId) {
+  await api.delete(`/me/meals/${mealId}/`);
+}
 
 
 export default api;

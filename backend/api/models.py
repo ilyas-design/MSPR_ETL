@@ -158,14 +158,30 @@ class UserProfile(models.Model):
 
 
 class MealEntry(models.Model):
+    class MealType(models.TextChoices):
+        BREAKFAST = 'breakfast', 'Petit-déjeuner'
+        LUNCH = 'lunch', 'Déjeuner'
+        DINNER = 'dinner', 'Dîner'
+        SNACK = 'snack', 'Collation'
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='meal_entries'
     )
     analyzed_at = models.DateTimeField(auto_now_add=True)
-    meal_type = models.CharField(max_length=50, null=True, blank=True)
+    meal_type = models.CharField(
+        max_length=20, choices=MealType.choices, null=True, blank=True
+    )
+
+    # Détail : liste d'items [{label, source, matched_name, macros}]
     detected_foods = models.JSONField(default=list)
+
+    # Totaux agrégés (pour requêtes/agrégations rapides)
     total_calories = models.FloatField(null=True, blank=True)
-    macros = models.JSONField(default=dict)
+    total_protein = models.FloatField(null=True, blank=True)
+    total_carbohydrates = models.FloatField(null=True, blank=True)
+    total_fat = models.FloatField(null=True, blank=True)
+
+    # Hash optionnel pour dédoublonner les analyses identiques
     image_hash = models.CharField(max_length=64, null=True, blank=True)
 
     class Meta:

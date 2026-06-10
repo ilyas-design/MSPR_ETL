@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { analyzeMealPhoto, lookupMacros } from '../services/api';
+import { analyzeMealPhoto, lookupMacros, saveMeal } from '../services/api';
 
 function MealAnalysis() {
   // Étape courante du workflow : 'upload' | 'select' | 'result'
@@ -21,6 +21,10 @@ function MealAnalysis() {
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const [saving, setSaving] = useState(false);
+  const [savedMessage, setSavedMessage] = useState('');
+
 
   // ----------------------------------------------------------------
   // Handlers
@@ -104,6 +108,27 @@ function MealAnalysis() {
     setLookupResult(null);
     setError('');
   };
+
+  const handleSaveMeal = async () => {
+  if (!lookupResult) return;
+  setSaving(true);
+  setSavedMessage('');
+  try {
+    await saveMeal({
+      detected_foods: lookupResult.items,
+      total_calories: lookupResult.total.calories,
+      total_protein: lookupResult.total.protein,
+      total_carbohydrates: lookupResult.total.carbohydrates,
+      total_fat: lookupResult.total.fat,
+    });
+    setSavedMessage('✅ Repas enregistré dans ton historique !');
+  } catch (err) {
+    setError('Impossible d\'enregistrer le repas. Réessaie.');
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   // ----------------------------------------------------------------
   // Rendu
@@ -304,10 +329,27 @@ function MealAnalysis() {
           </ul>
 
           <div className="preview-actions">
-            <button type="button" onClick={handleReset}>
+            <button
+              type="button"
+              onClick={handleSaveMeal}
+              disabled={saving || Boolean(savedMessage)}
+            >
+              {saving
+                ? 'Enregistrement…'
+                : savedMessage
+                  ? '✓ Enregistré'
+                  : '💾 Enregistrer dans mon historique'}
+            </button>
+            <button type="button" onClick={handleReset} className="button-secondary">
               📷 Nouvelle analyse
             </button>
           </div>
+
+          {savedMessage && (
+            <p className="form-success" role="status">{savedMessage}</p>
+          )}
+
+
         </>
       )}
     </section>

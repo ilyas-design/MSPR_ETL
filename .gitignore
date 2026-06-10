@@ -73,3 +73,4 @@ reports/etl_monitoring_*.json
 .env
 .env.local
 .env.*.local
+docker-compose.override.yml
