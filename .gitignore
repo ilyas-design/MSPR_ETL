@@ -74,3 +74,9 @@ reports/etl_monitoring_*.json
 .env.local
 .env.*.local
 docker-compose.override.yml
+
+
+.claude
+
+CLAUDE.md 
+

@@ -1,0 +1,1018 @@
+.app {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 2rem;
+  color: #111827;
+}
+
+.app-header p {
+  color: #6b7280;
+  margin: 0.25rem 0 2rem;
+}
+
+.app-main p {
+  color: #374151;
+}
+
+nav {
+  margin-top: 1rem;
+}
+
+nav a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+nav a:hover {
+  color: #2563eb;
+}
+
+/* Login page */
+
+.login-page {
+  max-width: 400px;
+  margin: 2rem auto;
+}
+
+.login-from {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.form-field label {
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.form-field input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.form-field input:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-color: #3b82f6;
+}
+
+.login-form button {
+  padding: 0.625rem 1rem;
+  background-color : #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  font-weight: 500;
+  margin-top: 0.5rem;
+}
+
+
+.login-form button:hover {
+  background-color: #2563eb;
+}
+
+.login-form button:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+
+.link-button {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+}
+
+.link-button:hover {
+  color: #2563eb;
+}
+
+.link-button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.form-hint {
+  color: #6b7280;
+  font-size: 0.8125rem;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+.form-footer {
+  text-align: center;
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.form-footer a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+.form-footer a:hover {
+  color: #2563eb;
+}
+
+.onboarding-page {
+  max-width: 600px;
+  margin: 2rem auto;
+}
+
+.form-fieldset {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  padding: 1rem 1.25rem;
+  margin: 0;
+}
+
+.form-fieldset legend {
+  font-weight: 500;
+  padding: 0 0.5rem;
+  color: #111827;
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.radio-label:hover {
+  background-color: #f9fafb;
+}
+
+.radio-label input[type="radio"]:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.form-field select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  font-family: inherit;
+  background-color: white;
+}
+
+.form-field select:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-color: #3b82f6;
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.form-grid-2 .form-field {
+  margin: 0;
+}
+
+.dashboard-hero {
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-hero h2 {
+  margin: 0 0 0.5rem 0;
+}
+
+.dashboard-hero p {
+  color: #6b7280;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.dashboard-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  background-color: white;
+}
+
+.dashboard-card h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.125rem;
+}
+
+.dashboard-card > p {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0 0 1rem 0;
+}
+
+.metric-list {
+  margin: 0 0 1rem 0;
+  font-size: 0.875rem;
+}
+
+.metric-list > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.metric-list > div:last-child {
+  border-bottom: none;
+}
+
+.metric-list dt {
+  color: #6b7280;
+  margin: 0;
+}
+
+.metric-list dd {
+  margin: 0;
+  font-weight: 500;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bmi-badge {
+  display: inline-block;
+  color: white;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.card-badge {
+  display: inline-block;
+  background-color: #f3f4f6;
+  color: #6b7280;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.card-link {
+  color: #3b82f6;
+  text-decoration: underline;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.card-link:hover {
+  color: #2563eb;
+}
+
+.form-success {
+  color: #065f46;
+  background-color: #d1fae5;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid #a7f3d0;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+/* Meal Analysis page */
+.meal-analysis-page {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.upload-zone {
+  margin: 1.5rem 0;
+}
+
+.upload-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1rem;
+  border: 2px dashed #d1d5db;
+  border-radius: 0.5rem;
+  background-color: #f9fafb;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.upload-label:hover {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.upload-label:focus-within {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.upload-icon {
+  font-size: 2rem;
+}
+
+.upload-label small {
+  color: #6b7280;
+  font-size: 0.8125rem;
+}
+
+.upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.preview-section {
+  margin: 1.5rem 0;
+}
+
+.meal-preview {
+  width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  border-radius: 0.5rem;
+  background-color: #f3f4f6;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.preview-actions button {
+  padding: 0.625rem 1rem;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.preview-actions button:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+.preview-actions button:disabled {
+  background-color: #93c5fd;
+  cursor: not-allowed;
+}
+
+.button-secondary {
+  background-color: #6b7280 !important;
+}
+
+.button-secondary:hover:not(:disabled) {
+  background-color: #4b5563 !important;
+}
+
+.loading-message {
+  color: #6b7280;
+  font-style: italic;
+  margin: 1rem 0;
+}
+
+.results-section {
+  margin-top: 2rem;
+}
+
+.predictions-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.prediction-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background-color: white;
+}
+
+.prediction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.prediction-label {
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.prediction-score {
+  background-color: #dbeafe;
+  color: #1e40af;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.macros-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.macros-grid > div {
+  text-align: center;
+  padding: 0.5rem;
+  background-color: #f9fafb;
+  border-radius: 0.375rem;
+}
+
+.macros-grid dt {
+  color: #6b7280;
+  font-size: 0.75rem;
+  margin: 0 0 0.125rem 0;
+}
+
+.macros-grid dd {
+  margin: 0;
+  font-weight: 600;
+  color: #111827;
+}
+
+.no-macros {
+  color: #6b7280;
+  font-size: 0.8125rem;
+  font-style: italic;
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .macros-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+
+/* ============================================================
+   MealAnalysis — workflow 3 étapes
+   ============================================================ */
+
+/* Stepper en haut de la page */
+.stepper {
+  display: flex;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.stepper li {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: #f1f3f5;
+  color: #868e96;
+  text-align: center;
+  border: 1px solid transparent;
+}
+
+.stepper li.active {
+  background: #e7f5ff;
+  color: #1971c2;
+  border-color: #74c0fc;
+  font-weight: 600;
+}
+
+.stepper li.done {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+/* Preview plus petite à l'étape 2 */
+.meal-preview.small {
+  max-width: 240px;
+  margin-bottom: 1rem;
+}
+
+/* Liste des prédictions avec checkboxes */
+.predictions-fieldset {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.predictions-fieldset legend {
+  padding: 0 0.5rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.prediction-row {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.prediction-row:last-child {
+  border-bottom: none;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.checkbox-label input[type='checkbox'] {
+  width: 1.25rem;
+  height: 1.25rem;
+  cursor: pointer;
+  accent-color: #1971c2;
+}
+
+.prediction-name {
+  flex: 1;
+  text-transform: capitalize;
+}
+
+.prediction-score {
+  font-variant-numeric: tabular-nums;
+  color: #868e96;
+  font-size: 0.9rem;
+}
+
+/* Badges (source de données) */
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-success,
+.badge-food_log {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+.badge-usda {
+  background: #fff3bf;
+  color: #845e09;
+}
+
+/* Carte du total à l'étape 3 */
+.total-card {
+  background: linear-gradient(135deg, #e7f5ff 0%, #d0ebff 100%);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem 0 2rem;
+  text-align: center;
+  border: 1px solid #74c0fc;
+}
+
+.total-card h3 {
+  margin: 0 0 0.5rem;
+  color: #1971c2;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.total-calories {
+  font-size: 3rem;
+  font-weight: 700;
+  color: #1864ab;
+  margin: 0.25rem 0;
+  line-height: 1;
+}
+
+.total-calories span {
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: #495057;
+}
+
+.total-card .macros-grid {
+  margin-top: 1rem;
+}
+
+.muted {
+  color: #868e96;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+
+/* ============================================================
+   Coach — page recommandations
+   ============================================================ */
+
+.balance-section {
+  margin: 1.5rem 0;
+}
+
+.balance-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.balance-row {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.balance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.balance-numbers {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+  color: #495057;
+}
+
+.balance-bar {
+  height: 8px;
+  background: #f1f3f5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.balance-bar-fill {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.suggestions-section {
+  margin-top: 2rem;
+}
+
+.suggestions-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.suggestion-card {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  border: 1px solid #dee2e6;
+  background: #fff;
+}
+
+.suggestion-card.priority-high {
+  border-left: 4px solid #fa5252;
+  background: #fff5f5;
+}
+
+.suggestion-card.priority-medium {
+  border-left: 4px solid #fab005;
+  background: #fff9db;
+}
+
+.suggestion-card.priority-low {
+  border-left: 4px solid #74c0fc;
+  background: #e7f5ff;
+}
+
+.suggestion-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.suggestion-content h4 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.suggestion-content p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+/* ============================================================
+   Plan de repas — page IA
+   ============================================================ */
+
+.meal-plan-form fieldset {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+}
+
+.meal-plan-form legend {
+  font-weight: 600;
+  padding: 0 0.5rem;
+  color: #495057;
+}
+
+.meal-plan-form label {
+  display: block;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.meal-plan-form input,
+.meal-plan-form select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: #fff;
+}
+
+.meal-plan-form input:focus,
+.meal-plan-form select:focus {
+  outline: 2px solid #74c0fc;
+  border-color: #1971c2;
+}
+
+.meal-plan-result {
+  margin-top: 2rem;
+}
+
+.meal-foods-list {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.meal-foods-list li {
+  padding: 0.25rem 0;
+  font-size: 0.92rem;
+}
+
+.button-link {
+  display: inline-block;
+  padding: 0.6rem 1rem;
+  background: #1971c2;
+  color: #fff;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.button-link:hover {
+  background: #1864ab;
+}
+
+/* Récap apports du jour sur la page Plan de repas */
+.today-recap {
+  background: #e7f5ff;
+  border-left: 4px solid #1971c2;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  border-radius: 6px;
+}
+
+.today-recap p {
+  margin: 0 0 0.75rem;
+  color: #1864ab;
+}
+
+.today-recap .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: #1864ab;
+  cursor: pointer;
+}
+
+/* Conseils IA via OpenRouter / gpt-oss */
+.ai-section {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #f3e8ff 0%, #e0e7ff 100%);
+  border-radius: 12px;
+  border: 1px solid #c4b5fd;
+}
+
+.ai-section h3 {
+  margin-top: 0;
+  color: #5b21b6;
+}
+
+.ai-advice-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-top: 1rem;
+  border-left: 4px solid #7c3aed;
+}
+
+.ai-advice-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ai-advice-card h4 {
+  margin: 0;
+  color: #5b21b6;
+  font-size: 1rem;
+}
+
+.ai-advice-text p {
+  margin: 0 0 0.75rem;
+  line-height: 1.6;
+  color: #1f2937;
+}
+
+.ai-advice-text p:last-child {
+  margin-bottom: 1rem;
+}
+
+/* Plan de repas IA — cartes détaillées avec ingrédients */
+.meal-card {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid #7c3aed;
+}
+
+.meal-card-header h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.meal-dish-name {
+  color: #5b21b6;
+  font-weight: 500;
+}
+
+.meal-card-stats {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  color: #495057;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px dashed #dee2e6;
+}
+
+.meal-card-stats span strong {
+  color: #1f2937;
+  font-variant-numeric: tabular-nums;
+}
+
+.meal-description {
+  color: #495057;
+  font-style: italic;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.meal-ingredients {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+
+.meal-ingredients li {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px dotted #e9ecef;
+  font-size: 0.95rem;
+}
+
+.meal-ingredients li:last-child {
+  border-bottom: none;
+}
+
+.ingredient-quantity {
+  min-width: 5rem;
+  font-weight: 600;
+  color: #5b21b6;
+  font-variant-numeric: tabular-nums;
+}
+
+.ingredient-name {
+  color: #1f2937;
+}
+
+details > summary {
+  cursor: pointer;
+  font-weight: 500;
+  padding: 0.25rem 0;
+  color: #5b21b6;
+}
+
+/* Page Plans sauvegardés (MongoDB) */
+.saved-plans-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.saved-plan-card {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid #5b21b6;
+}
+
+.saved-plan-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.saved-plan-header h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.saved-plan-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.saved-plan-detail {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #e9ecef;
+}

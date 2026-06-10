@@ -260,6 +260,64 @@ export async function deleteSavedPlan(planId) {
 }
 
 
+// ============================================================
+// Chantier 2 MSPR2 — Activités physiques
+// ============================================================
+
+export async function generateWorkoutPlanAI(params) {
+  // params = { goal, level, days_per_week, session_duration_min, equipment, location, preferences, limitations }
+  // (recent_sessions est ajouté côté Django automatiquement)
+  const response = await api.post('/ai/workout-plan-ai/', params, {
+    timeout: 120000,
+  });
+  return response.data;
+}
+
+export async function saveWorkoutPlan(plan, meta = {}) {
+  const response = await api.post('/me/workout-plans/', {
+    plan,
+    title: meta.title,
+    goal: meta.goal,
+    level: meta.level,
+  });
+  return response.data;
+}
+
+export async function listSavedWorkoutPlans() {
+  const response = await api.get('/me/workout-plans/');
+  return response.data;
+}
+
+export async function deleteSavedWorkoutPlan(planId) {
+  await api.delete(`/me/workout-plans/${planId}/`);
+}
+
+export async function logWorkoutSession(sessionData) {
+  // sessionData = { focus, duration_min, estimated_calories, exercises_done, difficulty_rating?, notes? }
+  const response = await api.post('/me/workouts/', sessionData);
+  return response.data;
+}
+
+export async function getMyWorkouts() {
+  const response = await api.get('/me/workouts/');
+  return response.data;
+}
+
+export async function getWorkoutsToday() {
+  const response = await api.get('/me/workouts/today/');
+  return response.data;
+}
+
+export async function getWorkoutsSummary(days = 14) {
+  const response = await api.get(`/me/workouts/summary/?days=${days}`);
+  return response.data;
+}
+
+export async function deleteWorkoutSession(workoutId) {
+  await api.delete(`/me/workouts/${workoutId}/`);
+}
+
+
 export async function getCoachAdvice() {
   // Le backend récupère lui-même le profil + les meals du jour
   const response = await api.post('/me/coach-advice/');
