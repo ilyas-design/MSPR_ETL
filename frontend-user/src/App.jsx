@@ -9,6 +9,7 @@ import MealAnalysis from './pages/MealAnalysis';
 import MealHistory from './pages/History';
 import Coach from './pages/Coach';
 import MealPlan from './pages/MealPlan';
+import SavedPlans from './pages/SavedPlans';
 import { isAuthenticated, logout } from './services/api';
 import './App.css';
 
@@ -83,6 +84,14 @@ function App() {
               </AuthGate>
             }
           />
+          <Route
+            path="/saved-plans"
+            element={
+              <AuthGate>
+                <SavedPlans />
+              </AuthGate>
+            }
+          />
         </Routes>
       </main>
     </div>
@@ -111,6 +120,8 @@ function Nav() {
           <Link to="/coach">Coach</Link>
           {' | '}
           <Link to="/meal-plan">Plan de repas</Link>
+          {' | '}
+          <Link to="/saved-plans">Plans sauvegardés</Link>
           {' | '}
           <Link to="/historique">Historique</Link>
           {' | '}

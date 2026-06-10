@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getRecommendationsToday } from '../services/api';
+import { getRecommendationsToday, getCoachAdvice } from '../services/api';
 
 const NUTRIENT_LABELS = {
   calories: { label: 'Calories', unit: 'kcal' },
@@ -20,6 +20,11 @@ function Coach() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Conseils IA générés par gpt-oss
+  const [aiAdvice, setAiAdvice] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+
   const loadData = async () => {
     setLoading(true);
     setError('');
@@ -34,6 +39,26 @@ function Coach() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAskAI = async () => {
+    setAiError('');
+    setAiAdvice(null);
+    setAiLoading(true);
+    try {
+      const result = await getCoachAdvice();
+      setAiAdvice(result);
+    } catch (err) {
+      if (err.response?.status === 502) {
+        setAiError("Le service IA est indisponible. Vérifie que nutrition-api tourne et que ta clé OpenRouter est configurée.");
+      } else if (err.response?.status === 429) {
+        setAiError("Trop de requêtes — attends 1 min avant de réessayer.");
+      } else {
+        setAiError('Erreur lors de la génération des conseils IA.');
+      }
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -131,6 +156,52 @@ function Coach() {
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      {/* Conseils IA via OpenRouter / gpt-oss */}
+      <section aria-labelledby="ai-heading" className="ai-section">
+        <h3 id="ai-heading">Conseils détaillés par l'IA</h3>
+        <p className="muted">
+          Demande à notre coach IA (basé sur le modèle open-source gpt-oss-120b)
+          des conseils personnalisés adaptés à tes apports du jour.
+        </p>
+
+        {!aiAdvice && !aiLoading && (
+          <button type="button" onClick={handleAskAI}>
+            ✨ Demander des conseils détaillés à l'IA
+          </button>
+        )}
+
+        {aiLoading && (
+          <p role="status" className="loading-message">
+            L'IA réfléchit à tes conseils personnalisés…
+          </p>
+        )}
+
+        {aiError && (
+          <p className="form-error" role="alert">{aiError}</p>
+        )}
+
+        {aiAdvice && (
+          <article className="ai-advice-card" aria-live="polite">
+            <header>
+              <h4>🤖 Le coach te dit :</h4>
+              <small className="muted">Généré par {aiAdvice.model}</small>
+            </header>
+            <div className="ai-advice-text">
+              {aiAdvice.advice.split('\n\n').map((paragraph, i) => (
+                <p key={i}>{paragraph}</p>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={handleAskAI}
+              className="button-secondary"
+            >
+              🔄 Regénérer
+            </button>
+          </article>
         )}
       </section>
 

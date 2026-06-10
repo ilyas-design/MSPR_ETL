@@ -851,3 +851,168 @@ nav a:hover {
   color: #1864ab;
   cursor: pointer;
 }
+
+/* Conseils IA via OpenRouter / gpt-oss */
+.ai-section {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #f3e8ff 0%, #e0e7ff 100%);
+  border-radius: 12px;
+  border: 1px solid #c4b5fd;
+}
+
+.ai-section h3 {
+  margin-top: 0;
+  color: #5b21b6;
+}
+
+.ai-advice-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-top: 1rem;
+  border-left: 4px solid #7c3aed;
+}
+
+.ai-advice-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ai-advice-card h4 {
+  margin: 0;
+  color: #5b21b6;
+  font-size: 1rem;
+}
+
+.ai-advice-text p {
+  margin: 0 0 0.75rem;
+  line-height: 1.6;
+  color: #1f2937;
+}
+
+.ai-advice-text p:last-child {
+  margin-bottom: 1rem;
+}
+
+/* Plan de repas IA — cartes détaillées avec ingrédients */
+.meal-card {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid #7c3aed;
+}
+
+.meal-card-header h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.meal-dish-name {
+  color: #5b21b6;
+  font-weight: 500;
+}
+
+.meal-card-stats {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  color: #495057;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px dashed #dee2e6;
+}
+
+.meal-card-stats span strong {
+  color: #1f2937;
+  font-variant-numeric: tabular-nums;
+}
+
+.meal-description {
+  color: #495057;
+  font-style: italic;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.meal-ingredients {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+
+.meal-ingredients li {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px dotted #e9ecef;
+  font-size: 0.95rem;
+}
+
+.meal-ingredients li:last-child {
+  border-bottom: none;
+}
+
+.ingredient-quantity {
+  min-width: 5rem;
+  font-weight: 600;
+  color: #5b21b6;
+  font-variant-numeric: tabular-nums;
+}
+
+.ingredient-name {
+  color: #1f2937;
+}
+
+details > summary {
+  cursor: pointer;
+  font-weight: 500;
+  padding: 0.25rem 0;
+  color: #5b21b6;
+}
+
+/* Page Plans sauvegardés (MongoDB) */
+.saved-plans-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.saved-plan-card {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid #5b21b6;
+}
+
+.saved-plan-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.saved-plan-header h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.saved-plan-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.saved-plan-detail {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #e9ecef;
+}

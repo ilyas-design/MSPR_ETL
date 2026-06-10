@@ -21,6 +21,10 @@ from api.views import (
     SatisfactionKPIView,
     DataQualityKPIView,
     RecommendationsTodayView,
+    CoachAdviceView,
+    AIMealPlanLLMView,
+    MealPlanListView,
+    MealPlanDetailView,
 
 )
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
@@ -58,4 +62,8 @@ urlpatterns = [
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/me/profile/', UserProfileView.as_view(), name='user-profile'),
     path('api/me/recommendations/today/', RecommendationsTodayView.as_view(), name='recommendations-today'),
+    path('api/me/coach-advice/', CoachAdviceView.as_view(), name='coach-advice'),
+    path('api/ai/meal-plan-ai/', AIMealPlanLLMView.as_view(), name='ai-meal-plan-llm'),
+    path('api/me/meal-plans/', MealPlanListView.as_view(), name='meal-plans-list'),
+    path('api/me/meal-plans/<str:plan_id>/', MealPlanDetailView.as_view(), name='meal-plans-detail'),
 ]

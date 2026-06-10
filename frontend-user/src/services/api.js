@@ -220,5 +220,51 @@ export async function generateMealPlan(params) {
   return response.data;
 }
 
+export async function generateMealPlanAI(params) {
+  // Version LLM (gpt-oss) — recettes complètes avec ingrédients
+  // params = { goal, calorie_target, allergies, restrictions, meals_per_day, already_eaten_kcal }
+  const response = await api.post('/ai/meal-plan-ai/', params, {
+    timeout: 120000, // LLM peut prendre 30-90s sur la free tier OpenRouter
+  });
+  return response.data;
+}
+
+// ============================================================
+// Plans de repas sauvegardés (MongoDB)
+// ============================================================
+
+export async function saveMealPlan(plan, meta = {}) {
+  // plan = l'objet complet renvoyé par /ai/meal-plan-ai/
+  // meta = { title?, goal?, calorie_target? }
+  const response = await api.post('/me/meal-plans/', {
+    plan,
+    title: meta.title,
+    goal: meta.goal,
+    calorie_target: meta.calorie_target,
+  });
+  return response.data;
+}
+
+export async function listSavedPlans() {
+  const response = await api.get('/me/meal-plans/');
+  return response.data;
+}
+
+export async function getSavedPlan(planId) {
+  const response = await api.get(`/me/meal-plans/${planId}/`);
+  return response.data;
+}
+
+export async function deleteSavedPlan(planId) {
+  await api.delete(`/me/meal-plans/${planId}/`);
+}
+
+
+export async function getCoachAdvice() {
+  // Le backend récupère lui-même le profil + les meals du jour
+  const response = await api.post('/me/coach-advice/');
+  return response.data; // { advice: "...", model: "..." }
+}
+
 
 export default api;

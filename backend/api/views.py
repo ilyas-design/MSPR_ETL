@@ -809,6 +809,35 @@ class AIMealPlanView(APIView):
         return Response(resp.json())
 
 
+@method_decorator(ratelimit(key='user', rate='10/m', method='POST', block=True), name='dispatch')
+class AIMealPlanLLMView(APIView):
+    """
+    POST /api/ai/meal-plan-ai/
+    Proxy vers nutrition-api/meal-plan-ai qui appelle gpt-oss pour générer
+    de VRAIES idées de repas avec recettes et ingrédients précis.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            resp = httpx.post(
+                f'{NUTRITION_API_URL}/meal-plan-ai',
+                json=request.data,
+                timeout=110.0,  # le LLM peut prendre 30-90s sur la free tier
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            detail = str(exc)
+            if hasattr(exc, 'response') and exc.response is not None:
+                detail = exc.response.text[:300]
+            return Response(
+                {'detail': f"Service IA indisponible : {detail}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(resp.json())
+
+
 # ---------------------------------------------------------------------------
 # Recommandations nutritionnelles personnalisées (chantier 1 MSPR2)
 # ---------------------------------------------------------------------------
@@ -987,6 +1016,82 @@ def _generate_suggestions(profile, totals, imbalances):
     return suggestions
 
 
+@method_decorator(ratelimit(key='user', rate='10/m', method='POST', block=True), name='dispatch')
+class CoachAdviceView(APIView):
+    """
+    POST /api/me/coach-advice/
+    Reprend l'analyse de RecommendationsTodayView (cibles + déséquilibres),
+    puis appelle nutrition-api /coach-advice (qui passe par OpenRouter / gpt-oss)
+    pour générer un conseil personnalisé en langage naturel.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        profile = UserProfile.objects.filter(user=request.user).first()
+        if not profile:
+            return Response(
+                {'detail': 'Profil non configuré.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.utils import timezone
+        today = timezone.localtime().date()
+        meals = MealEntry.objects.filter(user=request.user, analyzed_at__date=today)
+
+        totals = {
+            'calories': sum((m.total_calories or 0) for m in meals),
+            'protein': sum((m.total_protein or 0) for m in meals),
+            'carbohydrates': sum((m.total_carbohydrates or 0) for m in meals),
+            'fat': sum((m.total_fat or 0) for m in meals),
+            'meals_count': meals.count(),
+        }
+        targets = _compute_targets(profile)
+        imbalances = _detect_imbalances(totals, targets)
+
+        # Normalise allergies/restrictions
+        allergies = profile.allergies or ''
+        if isinstance(allergies, str):
+            allergies = [a.strip() for a in allergies.split(',') if a.strip()]
+        elif not isinstance(allergies, list):
+            allergies = []
+
+        restrictions_raw = profile.dietary_restrictions or ''
+        if isinstance(restrictions_raw, str):
+            restrictions = [r.strip() for r in restrictions_raw.split(',') if r.strip()]
+        elif isinstance(restrictions_raw, list):
+            restrictions = restrictions_raw
+        else:
+            restrictions = []
+
+        payload = {
+            'goal': profile.goal or 'maintenance',
+            'goal_label': profile.get_goal_display() if profile.goal else None,
+            'totals_today': totals,
+            'targets': targets,
+            'imbalances': imbalances,
+            'allergies': allergies,
+            'restrictions': restrictions,
+        }
+
+        try:
+            resp = httpx.post(
+                f'{NUTRITION_API_URL}/coach-advice',
+                json=payload,
+                timeout=35.0,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            detail = str(exc)
+            if hasattr(exc, 'response') and exc.response is not None:
+                detail = exc.response.text[:300]
+            return Response(
+                {'detail': f"Service IA indisponible : {detail}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(resp.json())
+
+
 class RecommendationsTodayView(APIView):
     """
     GET /api/me/recommendations/today/
@@ -1030,3 +1135,108 @@ class RecommendationsTodayView(APIView):
             'suggestions': suggestions,
         })
 
+
+
+# ---------------------------------------------------------------------------
+# MongoDB — Plans de repas IA sauvegardés (collection meal_plans)
+# ---------------------------------------------------------------------------
+
+from bson import ObjectId
+from bson.errors import InvalidId
+from pymongo.errors import PyMongoError
+from .mongo import meal_plans_collection
+
+
+def _serialize_plan(doc: dict) -> dict:
+    """Convertit un document Mongo en JSON-safe (ObjectId -> str)."""
+    if not doc:
+        return doc
+    doc = dict(doc)
+    doc['id'] = str(doc.pop('_id'))
+    # Datetime déjà serialisable par DRF
+    return doc
+
+
+class MealPlanListView(APIView):
+    """
+    GET  /api/me/meal-plans/  → liste les plans sauvegardés de l'utilisateur
+    POST /api/me/meal-plans/  → enregistre un nouveau plan
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            cursor = (
+                meal_plans_collection()
+                .find({'user_id': request.user.id})
+                .sort('created_at', -1)
+                .limit(50)
+            )
+            plans = [_serialize_plan(d) for d in cursor]
+        except PyMongoError as exc:
+            return Response(
+                {'detail': f'MongoDB inaccessible : {exc}'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(plans)
+
+    def post(self, request):
+        plan_data = request.data.get('plan')
+        if not plan_data or not isinstance(plan_data, dict):
+            return Response(
+                {'detail': 'Le champ "plan" (objet) est requis.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        document = {
+            'user_id': request.user.id,
+            'username': request.user.username,
+            'title': request.data.get('title') or 'Plan généré par l\'IA',
+            'plan': plan_data,  # tel quel : meals, total_calories, total_protein, advice, model
+            'goal': request.data.get('goal'),
+            'calorie_target': request.data.get('calorie_target'),
+            'created_at': timezone.now(),
+        }
+        try:
+            result = meal_plans_collection().insert_one(document)
+        except PyMongoError as exc:
+            return Response(
+                {'detail': f'MongoDB inaccessible : {exc}'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        document['_id'] = result.inserted_id
+        return Response(_serialize_plan(document), status=status.HTTP_201_CREATED)
+
+
+class MealPlanDetailView(APIView):
+    """
+    GET    /api/me/meal-plans/<id>/ → détail
+    DELETE /api/me/meal-plans/<id>/ → suppression
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _get(self, plan_id: str, user_id: int):
+        try:
+            oid = ObjectId(plan_id)
+        except InvalidId:
+            return None
+        return meal_plans_collection().find_one({'_id': oid, 'user_id': user_id})
+
+    def get(self, request, plan_id):
+        doc = self._get(plan_id, request.user.id)
+        if not doc:
+            return Response({'detail': 'Plan introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(_serialize_plan(doc))
+
+    def delete(self, request, plan_id):
+        try:
+            oid = ObjectId(plan_id)
+        except InvalidId:
+            return Response({'detail': 'ID invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+        result = meal_plans_collection().delete_one(
+            {'_id': oid, 'user_id': request.user.id}
+        )
+        if result.deleted_count == 0:
+            return Response({'detail': 'Plan introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
