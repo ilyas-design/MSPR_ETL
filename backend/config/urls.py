@@ -25,6 +25,10 @@ from api.views import (
     AIMealPlanLLMView,
     MealPlanListView,
     MealPlanDetailView,
+    WorkoutSessionViewSet,
+    AIWorkoutPlanView,
+    WorkoutPlanListView,
+    WorkoutPlanDetailView,
 
 )
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
@@ -41,6 +45,7 @@ router.register(r'pending-changes', PendingChangeViewSet, basename='pending-chan
 router.register(r'food-logs', FoodLogViewSet, basename='food-logs')
 router.register(r'exercises', ExerciseViewSet, basename='exercises')
 router.register(r'me/meals', MealEntryViewSet, basename='me-meals')
+router.register(r'me/workouts', WorkoutSessionViewSet, basename='me-workouts')
 
 urlpatterns = [
     path('api/', include(router.urls)),
@@ -66,4 +71,7 @@ urlpatterns = [
     path('api/ai/meal-plan-ai/', AIMealPlanLLMView.as_view(), name='ai-meal-plan-llm'),
     path('api/me/meal-plans/', MealPlanListView.as_view(), name='meal-plans-list'),
     path('api/me/meal-plans/<str:plan_id>/', MealPlanDetailView.as_view(), name='meal-plans-detail'),
+    path('api/ai/workout-plan-ai/', AIWorkoutPlanView.as_view(), name='ai-workout-plan'),
+    path('api/me/workout-plans/', WorkoutPlanListView.as_view(), name='workout-plans-list'),
+    path('api/me/workout-plans/<str:plan_id>/', WorkoutPlanDetailView.as_view(), name='workout-plans-detail'),
 ]

@@ -32,6 +32,7 @@ from .models import (
     PendingChange,
     Sante,
     UserProfile,
+    WorkoutSession,
 )
 from .permissions import IsSupervisor, is_supervisor
 from .serializers import (
@@ -45,6 +46,7 @@ from .serializers import (
     PendingChangeSerializer,
     SanteSerializer,
     UserProfileSerializer,
+    WorkoutSessionSerializer,
 )
 
 
@@ -1235,6 +1237,192 @@ class MealPlanDetailView(APIView):
         except InvalidId:
             return Response({'detail': 'ID invalide.'}, status=status.HTTP_400_BAD_REQUEST)
         result = meal_plans_collection().delete_one(
+            {'_id': oid, 'user_id': request.user.id}
+        )
+        if result.deleted_count == 0:
+            return Response({'detail': 'Plan introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# Chantier 2 MSPR2 — Moteur de recommandations d'activités physiques
+# ---------------------------------------------------------------------------
+
+class WorkoutSessionViewSet(viewsets.ModelViewSet):
+    """
+    GET/POST /api/me/workouts/        — liste / crée une séance effectuée
+    GET     /api/me/workouts/today/   — séances du jour
+    GET     /api/me/workouts/summary/ — agrégat 14 derniers jours (pour graphique)
+    """
+    serializer_class = WorkoutSessionSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+    filter_backends = [OrderingFilter]
+    ordering_fields = ('done_at', 'duration_min', 'estimated_calories')
+    ordering = ('-done_at',)
+
+    def get_queryset(self):
+        return WorkoutSession.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def today(self, request):
+        from django.utils import timezone
+        today = timezone.localtime().date()
+        sessions = self.get_queryset().filter(done_at__date=today)
+        serializer = self.get_serializer(sessions, many=True)
+        totals = {
+            'sessions_count': sessions.count(),
+            'duration_min': sum((s.duration_min or 0) for s in sessions),
+            'estimated_calories': sum((s.estimated_calories or 0) for s in sessions),
+        }
+        return Response({'sessions': serializer.data, 'totals': totals})
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        from django.utils import timezone
+        from django.db.models import Sum, Count
+        from datetime import timedelta
+
+        days = int(request.query_params.get('days', 14))
+        days = max(1, min(days, 90))
+        since = timezone.localtime().date() - timedelta(days=days - 1)
+
+        rows = (
+            self.get_queryset()
+            .filter(done_at__date__gte=since)
+            .extra(select={'day': 'date(done_at)'})
+            .values('day')
+            .annotate(
+                duration_min=Sum('duration_min'),
+                estimated_calories=Sum('estimated_calories'),
+                count=Count('id'),
+            )
+            .order_by('day')
+        )
+        return Response(list(rows))
+
+
+@method_decorator(ratelimit(key='user', rate='10/m', method='POST', block=True), name='dispatch')
+class AIWorkoutPlanView(APIView):
+    """
+    POST /api/ai/workout-plan-ai/
+    Proxy vers nutrition-api/workout-plan-ai qui appelle gpt-oss pour générer
+    un plan d'entraînement hebdomadaire personnalisé (chantier 2).
+
+    Enrichit la requête avec l'historique récent de l'utilisateur (pour
+    permettre la rotation des exercices et la progression adaptative).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        # Récupère les 5 dernières séances pour permettre rotation/progression
+        recent = list(
+            WorkoutSession.objects.filter(user=request.user)
+            .order_by('-done_at')[:5]
+            .values('focus', 'done_at', 'duration_min')
+        )
+        recent_sessions = [
+            {
+                'focus': r['focus'],
+                'date': r['done_at'].isoformat() if r['done_at'] else '',
+                'duration_min': r['duration_min'],
+            }
+            for r in recent
+        ]
+
+        payload = dict(request.data)
+        payload['recent_sessions'] = recent_sessions
+
+        try:
+            resp = httpx.post(
+                f'{NUTRITION_API_URL}/workout-plan-ai',
+                json=payload,
+                timeout=110.0,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            detail = str(exc)
+            if hasattr(exc, 'response') and exc.response is not None:
+                detail = exc.response.text[:300]
+            return Response(
+                {'detail': f'Service IA indisponible : {detail}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(resp.json())
+
+
+class WorkoutPlanListView(APIView):
+    """
+    GET  /api/me/workout-plans/  → plans d'entraînement sauvegardés (MongoDB)
+    POST /api/me/workout-plans/  → sauvegarde un nouveau plan
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _collection(self):
+        from .mongo import get_db
+        coll = get_db()['workout_plans']
+        coll.create_index([('user_id', 1), ('created_at', -1)])
+        return coll
+
+    def get(self, request):
+        try:
+            cursor = (
+                self._collection()
+                .find({'user_id': request.user.id})
+                .sort('created_at', -1)
+                .limit(50)
+            )
+            plans = [_serialize_plan(d) for d in cursor]
+        except PyMongoError as exc:
+            return Response(
+                {'detail': f'MongoDB inaccessible : {exc}'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(plans)
+
+    def post(self, request):
+        plan_data = request.data.get('plan')
+        if not plan_data or not isinstance(plan_data, dict):
+            return Response(
+                {'detail': 'Le champ "plan" (objet) est requis.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        document = {
+            'user_id': request.user.id,
+            'username': request.user.username,
+            'title': request.data.get('title') or "Plan d'entraînement IA",
+            'plan': plan_data,
+            'goal': request.data.get('goal'),
+            'level': request.data.get('level'),
+            'created_at': timezone.now(),
+        }
+        try:
+            result = self._collection().insert_one(document)
+        except PyMongoError as exc:
+            return Response(
+                {'detail': f'MongoDB inaccessible : {exc}'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        document['_id'] = result.inserted_id
+        return Response(_serialize_plan(document), status=status.HTTP_201_CREATED)
+
+
+class WorkoutPlanDetailView(APIView):
+    """
+    DELETE /api/me/workout-plans/<id>/ → suppression d'un plan sauvegardé
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, plan_id):
+        from .mongo import get_db
+        try:
+            oid = ObjectId(plan_id)
+        except InvalidId:
+            return Response({'detail': 'ID invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+        result = get_db()['workout_plans'].delete_one(
             {'_id': oid, 'user_id': request.user.id}
         )
         if result.deleted_count == 0:

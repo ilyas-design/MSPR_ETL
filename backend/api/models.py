@@ -157,6 +157,44 @@ class UserProfile(models.Model):
         return f"Profile({self.user.username})"
 
 
+class WorkoutSession(models.Model):
+    """
+    Séance d'entraînement effectuée par l'utilisateur. Sert au tracking
+    (historique, calories brûlées) et à la progression adaptative du moteur
+    de recommandations sportives (chantier 2 MSPR2).
+    """
+    class Focus(models.TextChoices):
+        UPPER = 'upper', 'Haut du corps'
+        LOWER = 'lower', 'Bas du corps'
+        FULL = 'full', 'Full body'
+        CARDIO = 'cardio', 'Cardio'
+        HIIT = 'hiit', 'HIIT'
+        MOBILITY = 'mobility', 'Mobilité / récupération'
+        OTHER = 'other', 'Autre'
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='workout_sessions'
+    )
+    done_at = models.DateTimeField(auto_now_add=True)
+
+    focus = models.CharField(max_length=20, choices=Focus.choices, default=Focus.OTHER)
+    duration_min = models.PositiveSmallIntegerField(default=30)
+    estimated_calories = models.PositiveIntegerField(null=True, blank=True)
+
+    # Détail des exercices réalisés (JSON, schéma flexible)
+    exercises_done = models.JSONField(default=list)
+
+    # Note de difficulté ressentie 1-5 (pour ajuster les futures séances)
+    difficulty_rating = models.PositiveSmallIntegerField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-done_at']
+
+    def __str__(self):
+        return f"Workout({self.user.username}, {self.done_at:%Y-%m-%d})"
+
+
 class MealEntry(models.Model):
     class MealType(models.TextChoices):
         BREAKFAST = 'breakfast', 'Petit-déjeuner'

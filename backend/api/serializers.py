@@ -11,6 +11,7 @@ from .models import (
     Exercise,
     UserProfile,
     MealEntry,
+    WorkoutSession,
 )
 
 class PatientSerializer(serializers.ModelSerializer):
@@ -56,6 +57,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = '__all__'
         read_only_fields = ['user']
+
+
+class WorkoutSessionSerializer(serializers.ModelSerializer):
+    focus_label = serializers.CharField(source='get_focus_display', read_only=True)
+
+    class Meta:
+        model = WorkoutSession
+        fields = '__all__'
+        read_only_fields = ['user', 'done_at']
 
 
 class MealEntrySerializer(serializers.ModelSerializer):
