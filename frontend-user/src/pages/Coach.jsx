@@ -1,6 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 import { getRecommendationsToday, getCoachAdvice } from '../services/api';
+import { AccessibleChart, ChartDataTable } from '../utils/chartA11y';
+import { buildChartSummary } from '../utils/chartA11yHelpers';
+import { activityChartOptions, CHART_PALETTE } from '../components/ChartOptions';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const NUTRIENT_LABELS = {
   calories: { label: 'Calories', unit: 'kcal' },
@@ -66,12 +81,41 @@ function Coach() {
     loadData();
   }, []);
 
+  const macroChart = useMemo(() => {
+    if (!data?.imbalances?.length) {
+      return { labels: [], datasets: [] };
+    }
+    const macroNutrients = ['protein', 'carbohydrates', 'fat'];
+    const rows = data.imbalances.filter((imb) => macroNutrients.includes(imb.nutrient));
+    return {
+      labels: rows.map((imb) => NUTRIENT_LABELS[imb.nutrient]?.label || imb.nutrient),
+      datasets: [
+        {
+          label: 'Consommé',
+          data: rows.map((imb) => imb.eaten),
+          backgroundColor: CHART_PALETTE[0],
+        },
+        {
+          label: 'Cible',
+          data: rows.map((imb) => imb.target),
+          backgroundColor: CHART_PALETTE[1],
+        },
+      ],
+    };
+  }, [data]);
+
+  const macroSummary = buildChartSummary(
+    'Macros du jour — consommé vs cible',
+    macroChart.labels,
+    macroChart.datasets.flatMap((ds) => ds.data),
+  );
+
   if (loading) return <p role="status">Analyse de tes apports en cours…</p>;
 
   if (error) {
     return (
-      <section className="coach-page">
-        <h2>Mon coach nutritionnel</h2>
+      <section className="coach-page" aria-labelledby="coach-title">
+        <h1 id="coach-title">Mon coach nutritionnel</h1>
         <p className="form-error" role="alert">{error}</p>
         <Link to="/onboarding">→ Compléter mon profil</Link>
       </section>
@@ -79,13 +123,35 @@ function Coach() {
   }
 
   return (
-    <section className="coach-page">
+    <section className="coach-page" aria-labelledby="coach-title">
       <header>
-        <h2>Mon coach nutritionnel</h2>
+        <h1 id="coach-title">Mon coach nutritionnel</h1>
         <p className="muted">
           Objectif : <strong>{data.profile.goal_label}</strong>
         </p>
       </header>
+
+      {macroChart.labels.length > 0 && (
+        <AccessibleChart
+          title="Graphique des macronutriments du jour"
+          summary={macroSummary}
+          dataTable={
+            <ChartDataTable
+              caption="Macronutriments — consommé vs cible"
+              headers={['Nutriment', 'Consommé', 'Cible']}
+              rows={macroChart.labels.map((label, i) => [
+                label,
+                macroChart.datasets[0]?.data[i] ?? 0,
+                macroChart.datasets[1]?.data[i] ?? 0,
+              ])}
+            />
+          }
+        >
+          <div className="chart-container">
+            <Bar data={macroChart} options={activityChartOptions} />
+          </div>
+        </AccessibleChart>
+      )}
 
       {/* Cibles vs réel — progress bars */}
       <section aria-labelledby="balance-heading" className="balance-section">

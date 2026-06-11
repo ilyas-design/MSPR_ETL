@@ -55,6 +55,25 @@ services:
       retries: 5
     restart: unless-stopped
 
+  mongo:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-healthai}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-healthai}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh \"mongodb://$$MONGO_INITDB_ROOT_USERNAME:$$MONGO_INITDB_ROOT_PASSWORD@localhost:27017/admin\" --eval \"db.adminCommand('ping').ok\" --quiet",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
   nutrition-api:
     build:
       context: ./nutrition-api
@@ -75,6 +94,34 @@ services:
       start_period: 90s
     restart: unless-stopped
 
+  reco-engine:
+    build:
+      context: ./reco-engine
+    volumes:
+      - sqlite_data:/data
+    environment:
+      - RECO_ENGINE_DB_PATH=/data/mspr_etl.db
+      - MONGO_HOST=mongo
+      - MONGO_USER=${MONGO_ROOT_USER:-healthai}
+      - MONGO_PASSWORD=${MONGO_ROOT_PASSWORD:-healthai}
+      - MONGO_DB_NAME=${MONGO_DB_NAME:-healthai_plans}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-oss-120b:free}
+    expose:
+      - "8002"
+    depends_on:
+      etl:
+        condition: service_completed_successfully
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -89,12 +136,33 @@ services:
       - POSTGRES_USER=healthai
       - POSTGRES_PASSWORD=healthai
       - NUTRITION_API_URL=http://nutrition-api:8001
+      - RECO_ENGINE_URL=http://reco-engine:8002
+      - MONGO_HOST=mongo
+      - MONGO_USER=${MONGO_ROOT_USER:-healthai}
+      - MONGO_PASSWORD=${MONGO_ROOT_PASSWORD:-healthai}
+      - MONGO_DB_NAME=${MONGO_DB_NAME:-healthai_plans}
     expose:
       - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/schema/')",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
     depends_on:
       etl:
         condition: service_completed_successfully
       app-postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      reco-engine:
         condition: service_healthy
       nutrition-api:
         condition: service_healthy
@@ -105,7 +173,17 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+
+  frontend-user:
+    build:
+      context: ./frontend-user
+    ports:
+      - "81:80"
+    depends_on:
+      backend:
+        condition: service_healthy
 
   airflow-permissions:
     image: busybox:1.36
@@ -209,3 +287,4 @@ volumes:
   sqlite_data:
   airflow_postgres_data:
   app_postgres_data:
+  mongo_data:

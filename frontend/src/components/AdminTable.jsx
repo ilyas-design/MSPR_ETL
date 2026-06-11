@@ -75,10 +75,9 @@ function AdminTable({
 
       {saveError ? <div className="error" role="alert">{saveError}</div> : null}
 
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
       <div
         className={`table-wrap${loading ? ' table-wrap--loading' : ''}`}
-        tabIndex="0"
+        tabIndex="0" // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- scrollable table region
         role="region"
         aria-busy={!!loading}
         aria-labelledby={`panel-title-${title}`}

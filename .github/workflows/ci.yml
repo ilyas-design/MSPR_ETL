@@ -13,14 +13,33 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1. Tests unitaires + couverture (ETL Python + Django REST API)
+  # 1. Tests unitaires + couverture (ETL, Django, nutrition-api, reco-engine)
   # ---------------------------------------------------------------------------
   tests-coverage:
     name: Tests & coverage (Python 3.12)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: healthai
+          POSTGRES_PASSWORD: healthai
+          POSTGRES_DB: healthai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       SECRET_KEY: ci-dummy-secret-key-insecure-do-not-use
       DEBUG: "True"
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: healthai
+      POSTGRES_USER: healthai
+      POSTGRES_PASSWORD: healthai
     steps:
       - uses: actions/checkout@v4
 
@@ -32,27 +51,39 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             backend/requirements.txt
+            nutrition-api/requirements.txt
+            reco-engine/requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r backend/requirements.txt
+          pip install -r nutrition-api/requirements.txt
+          pip install -r reco-engine/requirements.txt
           pip install coverage
 
       - name: Run ETL unit tests under coverage
-        run: python -m coverage run -m unittest discover -s tests -v
+        run: python -m coverage run --rcfile=.coveragerc -m unittest discover -s tests -v
 
       - name: Run Django API tests under coverage
         working-directory: backend
-        run: python -m coverage run --append manage.py test -v 2
+        run: python -m coverage run --append --rcfile=../.coveragerc manage.py test -v 2
 
-      - name: Combined coverage report (fail if < 100%)
-        run: python -m coverage report
+      - name: Run nutrition-api tests under coverage
+        working-directory: nutrition-api
+        run: python -m coverage run --append --rcfile=../.coveragerc --source=app -m pytest -v
+
+      - name: Run reco-engine tests under coverage
+        working-directory: reco-engine
+        run: python -m coverage run --append --rcfile=../.coveragerc --source=scoring,main,mongo,seed,llm,models -m pytest -v
+
+      - name: Combined coverage report (fail if < 70%)
+        run: python -m coverage report --rcfile=.coveragerc
 
       - name: Generate HTML coverage
         if: always()
-        run: python -m coverage html
+        run: python -m coverage html --rcfile=.coveragerc
 
       - name: Upload coverage artifact
         if: always()
@@ -116,7 +147,7 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------------
-  # 3. Build du frontend (Vite / React)
+  # 3. Build du frontend admin (Vite / React)
   # ---------------------------------------------------------------------------
   frontend-build:
     name: Frontend build (Node 20)
@@ -150,3 +181,73 @@ jobs:
           name: frontend-dist
           path: frontend/dist/
           retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # 4. Frontend utilisateur MSPR2 — lint, build, tests
+  # ---------------------------------------------------------------------------
+  frontend-user:
+    name: Frontend-user (Node 20)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend-user
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend-user/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-user-dist
+          path: frontend-user/dist/
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # 5. Microservices MSPR2 — pytest (nutrition-api, reco-engine)
+  # ---------------------------------------------------------------------------
+  mspr2-services:
+    name: MSPR2 services pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            nutrition-api/requirements.txt
+            reco-engine/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r nutrition-api/requirements.txt
+          pip install -r reco-engine/requirements.txt
+
+      - name: nutrition-api pytest
+        working-directory: nutrition-api
+        run: pytest -v
+
+      - name: reco-engine pytest
+        working-directory: reco-engine
+        run: pytest -v

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getMyProfile, updateMyProfile } from '../services/api';
+import { arrayToCommaList, commaListToArray } from '../utils/chartA11yHelpers';
 
 const GOAL_OPTIONS = [
   { value: 'weight_loss', label: 'Perdre du poids' },
@@ -28,6 +29,8 @@ function Profile() {
   const [dietaryRestrictions, setDietaryRestrictions] = useState('none');
   const [allergies, setAllergies] = useState('');
   const [equipment, setEquipment] = useState('');
+  const [injuries, setInjuries] = useState('');
+  const [mealBudget, setMealBudget] = useState('');
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
   const [height, setHeight] = useState('');
@@ -49,12 +52,14 @@ function Profile() {
         setDietaryRestrictions(data.dietary_restrictions || 'none');
         setAllergies(data.allergies || '');
         setEquipment(data.equipment_available || '');
+        setInjuries(arrayToCommaList(data.injuries));
+        setMealBudget(data.meal_budget ?? '');
         setAge(data.age || '');
         setGender(data.gender || '');
         setHeight(data.height_cm || '');
         setWeight(data.weight_kg || '');
         setTargetWeight(data.target_weight_kg || '');
-      } catch (err) {
+      } catch {
         setError('Erreur lors du chargement du profil.');
       } finally {
         setLoading(false);
@@ -89,6 +94,8 @@ function Profile() {
         dietary_restrictions: dietaryRestrictions,
         allergies,
         equipment_available: equipment,
+        injuries: commaListToArray(injuries),
+        meal_budget: mealBudget ? parseInt(mealBudget, 10) : null,
         age: age ? parseInt(age, 10) : null,
         gender,
         height_cm: height ? parseInt(height, 10) : null,
@@ -96,7 +103,7 @@ function Profile() {
         target_weight_kg: targetWeight ? parseFloat(targetWeight) : null,
       });
       setSuccess('Profil enregistré.');
-    } catch (err) {
+    } catch {
       setError("Erreur lors de l'enregistrement.");
     } finally {
       setSaving(false);
@@ -263,6 +270,32 @@ function Profile() {
             onChange={(event) => setEquipment(event.target.value)}
             disabled={saving}
             placeholder="Sépare par des virgules"
+          />
+        </div>
+
+        <div className="form-field">
+          <label htmlFor="injuries-edit">Blessures / limitations</label>
+          <input
+            id="injuries-edit"
+            type="text"
+            value={injuries}
+            onChange={(event) => setInjuries(event.target.value)}
+            disabled={saving}
+            placeholder="Ex : genou, dos — sépare par des virgules"
+          />
+        </div>
+
+        <div className="form-field">
+          <label htmlFor="meal-budget-edit">Budget repas hebdo (€)</label>
+          <input
+            id="meal-budget-edit"
+            type="number"
+            min="0"
+            max="10000"
+            value={mealBudget}
+            onChange={(event) => setMealBudget(event.target.value)}
+            disabled={saving}
+            placeholder="Optionnel"
           />
         </div>
 

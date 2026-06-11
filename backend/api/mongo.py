@@ -15,11 +15,21 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-MONGO_URI = os.environ.get(
-    'MONGO_URI',
-    'mongodb://healthai:healthai@localhost:27017/healthai_plans?authSource=admin',
-)
+MONGO_HOST = os.environ.get('MONGO_HOST', 'localhost')
+MONGO_PORT = os.environ.get('MONGO_PORT', '27017')
+MONGO_USER = os.environ.get('MONGO_USER', 'healthai')
+MONGO_PASSWORD = os.environ.get('MONGO_PASSWORD', 'healthai')
 MONGO_DB_NAME = os.environ.get('MONGO_DB_NAME', 'healthai_plans')
+
+
+def _default_mongo_uri() -> str:
+    return (
+        f'mongodb://{MONGO_USER}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/'
+        f'{MONGO_DB_NAME}?authSource=admin'
+    )
+
+
+MONGO_URI = os.environ.get('MONGO_URI') or _default_mongo_uri()
 
 
 @lru_cache(maxsize=1)

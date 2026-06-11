@@ -135,16 +135,23 @@ function MealAnalysis() {
   // ----------------------------------------------------------------
 
   return (
-    <section className="meal-analysis-page">
-      <h2>Analyser un repas</h2>
+    <section className="meal-analysis-page" aria-labelledby="meal-analysis-title">
+      <h1 id="meal-analysis-title">Analyser un repas</h1>
 
       {/* Stepper visuel */}
-      <ol className="stepper" aria-label="Progression">
-        <li className={step === 'upload' ? 'active' : 'done'}>1. Photo</li>
-        <li className={step === 'select' ? 'active' : step === 'result' ? 'done' : ''}>
+      <ol className="stepper" aria-label="Étapes de l'analyse">
+        <li className={step === 'upload' ? 'active' : 'done'} aria-current={step === 'upload' ? 'step' : undefined}>
+          1. Photo
+        </li>
+        <li
+          className={step === 'select' ? 'active' : step === 'result' ? 'done' : ''}
+          aria-current={step === 'select' ? 'step' : undefined}
+        >
           2. Vérification
         </li>
-        <li className={step === 'result' ? 'active' : ''}>3. Résultats</li>
+        <li className={step === 'result' ? 'active' : ''} aria-current={step === 'result' ? 'step' : undefined}>
+          3. Résultats
+        </li>
       </ol>
 
       {error && (
@@ -161,7 +168,7 @@ function MealAnalysis() {
               <label htmlFor="meal-photo" className="upload-label">
                 <span className="upload-icon" aria-hidden="true">📷</span>
                 <span>Cliquer pour choisir une photo</span>
-                <small>JPG, PNG · max 10 Mo</small>
+                <small id="meal-photo-hint">JPG, PNG · max 10 Mo</small>
               </label>
               <input
                 id="meal-photo"
@@ -169,6 +176,7 @@ function MealAnalysis() {
                 accept="image/*"
                 onChange={handleFileChange}
                 className="upload-input"
+                aria-describedby="meal-photo-hint"
               />
             </div>
           )}

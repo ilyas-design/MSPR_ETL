@@ -13,19 +13,25 @@ import MealPlan from './pages/MealPlan';
 import SavedPlans from './pages/SavedPlans';
 import WorkoutPlan from './pages/WorkoutPlan';
 import WorkoutHistory from './pages/WorkoutHistory';
+import AccessibilityDeclaration from './pages/AccessibilityDeclaration';
 import { isAuthenticated, logout } from './services/api';
 import './App.css';
 
 function App() {
   return (
     <div className="app">
+      <a href="#main-content" className="skip-link">
+        Aller au contenu principal
+      </a>
+
       <AppHeader />
 
-      <main className="app-main">
+      <main id="main-content" className="app-main" tabIndex={-1}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<SignUp />} />
+          <Route path="/accessibilite" element={<AccessibilityDeclaration />} />
           <Route path="/dashboard" element={<AuthGate><Dashboard /></AuthGate>} />
           <Route path="/onboarding" element={<AuthGate><Onboarding /></AuthGate>} />
           <Route path="/profile" element={<AuthGate><Profile /></AuthGate>} />
@@ -174,21 +180,24 @@ function NavDropdown({ label, icon, items, matchPaths = [], extraMatch }) {
     <div
       ref={dropdownRef}
       className={`nav-dropdown ${open ? 'open' : ''} ${isActive ? 'active' : ''}`}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
     >
       <button
         type="button"
         className="nav-item nav-dropdown-trigger"
         aria-haspopup="true"
         aria-expanded={open}
+        aria-controls={`nav-menu-${label.replace(/\s+/g, '-').toLowerCase()}`}
         onClick={() => setOpen(!open)}
       >
         <span>{label}</span>
         <span className="nav-dropdown-chevron" aria-hidden="true">▾</span>
       </button>
 
-      <div className="nav-dropdown-menu" role="menu">
+      <div
+        className="nav-dropdown-menu"
+        role="menu"
+        id={`nav-menu-${label.replace(/\s+/g, '-').toLowerCase()}`}
+      >
         <div className="nav-dropdown-header" aria-hidden="true">
           <span className="nav-dropdown-icon">{icon}</span>
           <span className="nav-dropdown-title">{label}</span>
@@ -223,8 +232,10 @@ function AppFooter() {
   return (
     <footer className="app-footer" role="contentinfo">
       <p>
-        © {new Date().getFullYear()} HealthAI Coach — Projet MSPR2 EPSI ·
-        <Link to="/" style={{ marginLeft: '0.5rem' }}>Accueil</Link>
+        © {new Date().getFullYear()} HealthAI Coach — Projet MSPR2 EPSI ·{' '}
+        <Link to="/">Accueil</Link>
+        {' · '}
+        <Link to="/accessibilite">Accessibilité</Link>
       </p>
     </footer>
   );

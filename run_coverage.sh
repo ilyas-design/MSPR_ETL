@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ----------------------------------------------------------------------------
-# Run the full test suite (ETL unit tests + Django API tests) under coverage
-# and print a combined report.
+# Run the full test suite (ETL, Django, nutrition-api, reco-engine, frontend-user)
+# under coverage and print combined Python report + frontend summary.
 #
 # Usage:
 #   ./run_coverage.sh
@@ -44,11 +44,9 @@ if [ ! -d ".venv" ]; then
 fi
 
 if [ -f ".venv/Scripts/activate" ]; then
-  # Windows / Git Bash layout
   # shellcheck disable=SC1091
   source ".venv/Scripts/activate"
 elif [ -f ".venv/bin/activate" ]; then
-  # Linux / macOS layout
   # shellcheck disable=SC1091
   source ".venv/bin/activate"
 else
@@ -59,13 +57,14 @@ fi
 # --- Ensure coverage + project deps are installed ------------------------
 if ! python -m coverage --version >/dev/null 2>&1; then
   echo "==> Installing coverage"
-  pip install --quiet --upgrade pip
-  pip install --quiet coverage
+  python -m pip install --quiet --upgrade pip
+  python -m pip install --quiet coverage
 fi
 
-# Make sure ETL + backend deps are available (cheap no-op if already installed)
-pip install --quiet -r requirements.txt
-pip install --quiet -r backend/requirements.txt
+python -m pip install --quiet -r requirements.txt
+python -m pip install --quiet -r backend/requirements.txt
+python -m pip install --quiet -r nutrition-api/requirements.txt
+python -m pip install --quiet -r reco-engine/requirements.txt
 
 # --- Environment for Django tests ----------------------------------------
 if [ -f ".env" ]; then
@@ -79,23 +78,51 @@ if [ -z "${SECRET_KEY:-}" ]; then
 fi
 export DEBUG="${DEBUG:-True}"
 export DB_PATH="${DB_PATH:-$SCRIPT_DIR/mspr_etl.db}"
+export POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}"
+export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+export POSTGRES_DB="${POSTGRES_DB:-healthai}"
+export POSTGRES_USER="${POSTGRES_USER:-healthai}"
+export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-healthai}"
 
 # --- Run coverage --------------------------------------------------------
 python -m coverage erase
 
 echo "==> ETL / unit tests"
-python -m coverage run -m unittest discover -s tests -v
+python -m coverage run --rcfile=.coveragerc -m unittest discover -s tests -v
 
 echo "==> Django API tests"
 (
   cd backend
-  python -m coverage run --append manage.py test -v 2
+  python -m coverage run --append --rcfile=../.coveragerc manage.py test -v 2
 )
 
-echo "==> Coverage report"
-python -m coverage report
+echo "==> nutrition-api tests"
+(
+  cd nutrition-api
+  python -m coverage run --append --rcfile=../.coveragerc --source=app -m pytest -v
+)
+
+echo "==> reco-engine tests"
+(
+  cd reco-engine
+  python -m coverage run --append --rcfile=../.coveragerc --source=scoring,main,mongo,seed,llm,models -m pytest -v
+)
+
+echo "==> Combined Python coverage report"
+python -m coverage report --rcfile=.coveragerc
 
 if [ "$WITH_HTML" -eq 1 ]; then
-  python -m coverage html
+  python -m coverage html --rcfile=.coveragerc
   echo "HTML report written to htmlcov/index.html"
 fi
+
+echo "==> frontend-user tests (Vitest)"
+(
+  cd frontend-user
+  if [ ! -d node_modules ]; then
+    npm install
+  fi
+  npm run test:coverage
+)
+
+echo "==> Done"

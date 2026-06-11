@@ -1,10 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 import {
   getMyProfile,
   getRecommendationsToday,
   getWorkoutsToday,
+  getWorkoutsSummary,
 } from '../services/api';
+import { AccessibleChart, ChartDataTable } from '../utils/chartA11y';
+import { arrayToCommaList, buildChartSummary } from '../utils/chartA11yHelpers';
+import { activityChartOptions, CHART_PALETTE } from '../components/ChartOptions';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 // Traductions BDD → libellés FR
 const GOAL_LABELS = {
@@ -49,6 +65,7 @@ function Dashboard() {
   const [profile, setProfile] = useState(null);
   const [reco, setReco] = useState(null);
   const [workoutsToday, setWorkoutsToday] = useState(null);
+  const [weeklyActivity, setWeeklyActivity] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -64,19 +81,42 @@ function Dashboard() {
         setProfile(profileData);
 
         // Stats du jour : en parallèle, fail-silent
-        const [recoData, workoutData] = await Promise.allSettled([
+        const [recoData, workoutData, weeklyData] = await Promise.allSettled([
           getRecommendationsToday(),
           getWorkoutsToday(),
+          getWorkoutsSummary(7),
         ]);
         if (recoData.status === 'fulfilled') setReco(recoData.value);
         if (workoutData.status === 'fulfilled') setWorkoutsToday(workoutData.value);
-      } catch (err) {
+        if (weeklyData.status === 'fulfilled') setWeeklyActivity(weeklyData.value);
+      } catch {
         setError('Erreur lors du chargement de ton tableau de bord.');
       } finally {
         setLoading(false);
       }
     })();
   }, [navigate]);
+
+  const activityChart = useMemo(() => {
+    const labels = weeklyActivity.map((row) => row.day);
+    const minutes = weeklyActivity.map((row) => row.duration_min || 0);
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Minutes d\'activité',
+          data: minutes,
+          backgroundColor: CHART_PALETTE[0],
+        },
+      ],
+    };
+  }, [weeklyActivity]);
+
+  const activitySummary = buildChartSummary(
+    'Activité des 7 derniers jours',
+    activityChart.labels,
+    activityChart.datasets[0]?.data || [],
+  );
 
   if (loading) {
     return (
@@ -117,8 +157,8 @@ function Dashboard() {
       {/* HERO — objectif + identité */}
       <header className="dashboard-hero">
         <div className="dashboard-hero-content">
-          <span className="dashboard-eyebrow">Bonjour {profile.first_name || ''}</span>
-          <h2>Ton tableau de bord</h2>
+          <p className="dashboard-eyebrow">Bonjour {profile.first_name || ''}</p>
+          <h1 className="dashboard-hero-title">Ton tableau de bord</h1>
           <p className="dashboard-hero-meta">
             <span className="hero-pill">🎯 {goalLabel}</span>
             <span className="hero-pill">⚡ {levelLabel}</span>
@@ -161,7 +201,14 @@ function Dashboard() {
             {proteinEaten}
             <span className="stat-unit">g</span>
           </p>
-          <div className="stat-bar">
+          <div
+            className="stat-bar"
+            role="progressbar"
+            aria-valuenow={Math.min(100, Math.round((proteinEaten / proteinTarget) * 100))}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Protéines : ${proteinEaten} g sur ${proteinTarget} g`}
+          >
             <div
               className="stat-bar-fill stat-bar-fill-accent"
               style={{ width: `${Math.min(100, (proteinEaten / proteinTarget) * 100)}%` }}
@@ -181,7 +228,14 @@ function Dashboard() {
             {workoutMinutes}
             <span className="stat-unit">min</span>
           </p>
-          <div className="stat-bar">
+          <div
+            className="stat-bar"
+            role="progressbar"
+            aria-valuenow={Math.min(100, Math.round((workoutMinutes / 45) * 100))}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Activité : ${workoutMinutes} minutes aujourd'hui`}
+          >
             <div
               className="stat-bar-fill stat-bar-fill-orange"
               style={{ width: `${Math.min(100, (workoutMinutes / 45) * 100)}%` }}
@@ -195,10 +249,37 @@ function Dashboard() {
         </article>
       </section>
 
+      {weeklyActivity.length > 0 && (
+        <section className="dashboard-chart-section" aria-labelledby="activity-chart-heading">
+          <h3 id="activity-chart-heading" className="dashboard-section-title">
+            Activité sur 7 jours
+          </h3>
+          <div className="chart-container">
+            <AccessibleChart
+              title="Activité sur 7 jours"
+              summary={activitySummary}
+              dataTable={(
+                <ChartDataTable
+                  caption="Minutes d'activité par jour"
+                  headers={['Jour', 'Minutes', 'Séances']}
+                  rows={weeklyActivity.map((row) => [
+                    row.day,
+                    row.duration_min || 0,
+                    row.count || 0,
+                  ])}
+                />
+              )}
+            >
+              <Bar data={activityChart} options={activityChartOptions} />
+            </AccessibleChart>
+          </div>
+        </section>
+      )}
+
       {/* ACTIONS RAPIDES — ce que l'user peut faire maintenant */}
       <h3 className="dashboard-section-title">Que veux-tu faire ?</h3>
       <div className="dashboard-cards">
-        <Link to="/meal-analysis" className="card-link">
+        <Link to="/meal-analysis" className="card-link" aria-label="Analyser un repas — photo vers macros et suggestions IA">
           <article className="dashboard-card action-card">
             <span className="action-icon">📸</span>
             <h4>Analyser un repas</h4>
@@ -207,7 +288,7 @@ function Dashboard() {
           </article>
         </Link>
 
-        <Link to="/coach" className="card-link">
+        <Link to="/coach" className="card-link" aria-label="Mon coach IA — conseils nutritionnels personnalisés">
           <article className="dashboard-card action-card">
             <span className="action-icon">🧠</span>
             <h4>Mon coach IA</h4>
@@ -216,7 +297,7 @@ function Dashboard() {
           </article>
         </Link>
 
-        <Link to="/meal-plan" className="card-link">
+        <Link to="/meal-plan" className="card-link" aria-label="Plan repas IA — menu sur mesure">
           <article className="dashboard-card action-card">
             <span className="action-icon">🍽️</span>
             <h4>Plan repas IA</h4>
@@ -225,7 +306,7 @@ function Dashboard() {
           </article>
         </Link>
 
-        <Link to="/workout-plan" className="card-link">
+        <Link to="/workout-plan" className="card-link" aria-label="Mon programme d'entraînement personnalisé">
           <article className="dashboard-card action-card">
             <span className="action-icon">🏋️</span>
             <h4>Mon programme</h4>
@@ -273,6 +354,10 @@ function Dashboard() {
             <li><span>Restrictions</span><span>{DIET_LABELS[profile.dietary_restrictions] || '—'}</span></li>
             <li><span>Allergies</span><span>{profile.allergies || '—'}</span></li>
             <li><span>Équipement</span><span>{profile.equipment_available || 'Poids du corps'}</span></li>
+            <li><span>Limitations</span><span>{arrayToCommaList(profile.injuries) || '—'}</span></li>
+            {profile.meal_budget != null && profile.meal_budget !== '' && (
+              <li><span>Budget repas</span><span>{profile.meal_budget} €/sem</span></li>
+            )}
             <li><span>Cible calorique</span><span>{profile.daily_calorie_target ? `${profile.daily_calorie_target} kcal/j` : '—'}</span></li>
           </ul>
           <Link to="/profile" className="link-button" style={{ marginTop: '0.75rem' }}>

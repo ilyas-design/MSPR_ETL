@@ -1,0 +1,39 @@
+[
+  {
+    "id": 1,
+    "name": "push-up",
+    "bodyPart": "chest",
+    "target": "pectorals",
+    "equipment": "body weight",
+    "level": "beginner",
+    "instructions": "Start in a high plank. Lower your chest to the floor with elbows at ~45°. Press back up while keeping core tight."
+  },
+  {
+    "id": 2,
+    "name": "bodyweight squat",
+    "bodyPart": "legs",
+    "target": "quadriceps",
+    "equipment": "body weight",
+    "level": "beginner",
+    "instructions": "Stand feet shoulder-width. Sit hips back and down, keep knees tracking toes. Drive through mid-foot to stand."
+  },
+  {
+    "id": 3,
+    "name": "plank",
+    "bodyPart": "waist",
+    "target": "abs",
+    "equipment": "body weight",
+    "level": "beginner",
+    "instructions": "Forearms on the floor, elbows under shoulders. Hold a straight line from head to heels without sagging hips."
+  },
+  {
+    "id": 4,
+    "name": "dumbbell row",
+    "bodyPart": "back",
+    "target": "lats",
+    "equipment": "dumbbell",
+    "level": "intermediate",
+    "instructions": "Hinge at hips with a flat back. Pull the dumbbell toward your hip, pause, then lower under control."
+  }
+]
+
