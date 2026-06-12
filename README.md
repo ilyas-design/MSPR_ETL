@@ -29,9 +29,11 @@ nutrition-api (FastAPI + HuggingFace)   ← jamais exposé sur internet
 
 | Service | Port | Rôle |
 |---|---|---|
-| `frontend` | 80 | nginx — React + proxy `/api` |
+| `frontend` | 80 | nginx — app admin MSPR1 + proxy `/api` |
+| `frontend-user` | 81 | nginx — app utilisateur MSPR2 + proxy `/api` |
 | `backend` | interne 8000 | Django REST API + JWT + proxy IA |
 | `app-postgres` | interne 5432 | PostgreSQL — comptes utilisateurs, profils, repas |
+| `mongo` | interne 27017 | MongoDB — plans repas / entraînement sauvegardés (IA) |
 | `nutrition-api` | interne 8001 | FastAPI — reconnaissance d'image IA + plans repas |
 | `etl` | — | One-shot Python/Pandas — génère `mspr_etl.db` depuis les CSV/JSON |
 | `airflow-apiserver` | 8081 | Interface Airflow (UI) |
@@ -69,10 +71,11 @@ Prérequis : [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 docker compose up --build
 ```
 
-- Application : **http://localhost**
+- App admin (MSPR1) : **http://localhost**
+- App utilisateur (MSPR2) : **http://localhost:81**
 - Airflow UI : **http://localhost:8081** (login : `airflow` / `airflow`)
 
-L'ordre de démarrage est géré automatiquement : ETL → app-postgres + nutrition-api → backend → frontend.
+L'ordre de démarrage est géré automatiquement : ETL → app-postgres + mongo + nutrition-api → backend → frontend + frontend-user.
 
 Pour relancer sans reconstruire :
 

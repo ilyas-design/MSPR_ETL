@@ -47,7 +47,7 @@ function Login() {
           </p>
         </header>
 
-        <form onSubmit={handleSubmit} className="auth-form" noValidate>
+        <form onSubmit={handleSubmit} className="auth-form" noValidate aria-describedby={error ? 'login-error' : undefined}>
           <div className="auth-field">
             <label htmlFor="email">Email</label>
             <input
@@ -77,7 +77,7 @@ function Login() {
           </div>
 
           {error && (
-            <p className="auth-error" role="alert">{error}</p>
+            <p id="login-error" className="auth-error" role="alert">{error}</p>
           )}
 
           <button type="submit" className="auth-submit" disabled={loading}>

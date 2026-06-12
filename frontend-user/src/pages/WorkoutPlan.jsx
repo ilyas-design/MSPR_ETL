@@ -5,6 +5,7 @@ import {
   saveWorkoutPlan,
   getMyProfile,
 } from '../services/api';
+import { arrayToCommaList, commaListToArray } from '../utils/chartA11yHelpers';
 
 const GOAL_OPTIONS = [
   { value: 'weight_loss', label: 'Perte de graisse / sèche' },
@@ -61,7 +62,10 @@ function WorkoutPlan() {
               : profile.equipment_available,
           );
         }
-      } catch (err) {
+        if (profile.injuries?.length) {
+          setLimitations(arrayToCommaList(profile.injuries));
+        }
+      } catch {
         // silent
       }
     })();
@@ -72,7 +76,6 @@ function WorkoutPlan() {
     setError('');
     setSaveSuccess('');
     setPlanSavedId(null);
-    setLoggedSessions(new Set());
     setLoading(true);
     setPlan(null);
     try {
@@ -84,7 +87,7 @@ function WorkoutPlan() {
         location,
         equipment: equipment.split(',').map((s) => s.trim()).filter(Boolean),
         preferences: preferences.split(',').map((s) => s.trim()).filter(Boolean),
-        limitations: limitations.split(',').map((s) => s.trim()).filter(Boolean),
+        limitations: commaListToArray(limitations),
       };
       const result = await generateWorkoutPlanAI(params);
       setPlan(result);
@@ -128,9 +131,9 @@ function WorkoutPlan() {
 
 
   return (
-    <section className="workout-plan-page">
+    <section className="workout-plan-page" aria-labelledby="workout-plan-title">
       <header>
-        <h2>Plan d'entraînement personnalisé par l'IA</h2>
+        <h1 id="workout-plan-title">Plan d&apos;entraînement personnalisé par l&apos;IA</h1>
         <p className="muted">
           Moteur de recommandation multi-critères (chantier 2 MSPR2) :
           objectif, niveau, équipement, préférences, limitations, et historique

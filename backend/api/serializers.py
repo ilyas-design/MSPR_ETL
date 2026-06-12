@@ -9,7 +9,6 @@ from .models import (
     UserProfile,
     FoodLog,
     Exercise,
-    UserProfile,
     MealEntry,
     WorkoutSession,
 )
@@ -50,13 +49,6 @@ class ExerciseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Exercise
         fields = '__all__'
-
-
-class UserProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserProfile
-        fields = '__all__'
-        read_only_fields = ['user']
 
 
 class WorkoutSessionSerializer(serializers.ModelSerializer):
@@ -113,6 +105,21 @@ class PendingChangeSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     bmi = serializers.ReadOnlyField()
+
+    def validate_injuries(self, value):
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError('injuries must be a list of strings.')
+        if len(value) > 20:
+            raise serializers.ValidationError('Maximum 20 injuries/limitations.')
+        return [str(item).strip()[:100] for item in value if str(item).strip()]
+
+    def validate_meal_budget(self, value):
+        if value is not None and (value < 0 or value > 10000):
+            raise serializers.ValidationError('meal_budget must be between 0 and 10000.')
+        return value
+
     class Meta:
         model = UserProfile
         fields = [
@@ -121,6 +128,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'dietary_restrictions',
             'allergies',
             'equipment_available',
+            'injuries',
+            'meal_budget',
             'daily_calorie_target',
             'age',
             'gender',

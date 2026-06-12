@@ -3,7 +3,6 @@ import {
   generateMealPlanAI,
   getMyProfile,
   getRecommendationsToday,
-  saveMeal,
   saveMealPlan,
 } from '../services/api';
 
@@ -35,10 +34,7 @@ function MealPlan() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // État de sauvegarde : Set d'index des repas déjà enregistrés + état de chargement
-  const [savedMeals, setSavedMeals] = useState(new Set());
-  const [savingMealIdx, setSavingMealIdx] = useState(null);
-  const [savingAll, setSavingAll] = useState(false);
+  // État de sauvegarde du plan entier
   const [saveSuccess, setSaveSuccess] = useState('');
 
   // Sauvegarde du plan entier dans MongoDB
@@ -101,66 +97,6 @@ function MealPlan() {
     setUseRemainingMode(!useRemainingMode);
   };
 
-  // Convertit un repas du plan en payload MealEntry
-  const mealToPayload = (meal) => {
-    const mealTypeMap = {
-      'Petit-déjeuner': 'breakfast',
-      'Déjeuner': 'lunch',
-      'Dîner': 'dinner',
-      'Collation': 'snack',
-    };
-    return {
-      meal_type: mealTypeMap[meal.meal_type] || undefined,
-      detected_foods: meal.ingredients.map((ing) => ({
-        label: ing.item,
-        pretty_label: ing.item,
-        matched_name: `${ing.quantity} ${ing.item}`,
-        source: 'ai_meal_plan',
-        macros: null,
-      })),
-      total_calories: meal.estimated_calories,
-      total_protein: meal.estimated_protein,
-      total_carbohydrates: meal.estimated_carbs || 0,
-      total_fat: meal.estimated_fat || 0,
-    };
-  };
-
-  const handleSaveMeal = async (meal, index) => {
-    setSavingMealIdx(index);
-    setError('');
-    try {
-      await saveMeal(mealToPayload(meal));
-      setSavedMeals((prev) => new Set([...prev, index]));
-    } catch (err) {
-      setError("Impossible d'enregistrer ce repas. Réessaie.");
-    } finally {
-      setSavingMealIdx(null);
-    }
-  };
-
-  const handleSaveAll = async () => {
-    if (!plan?.meals) return;
-    setSavingAll(true);
-    setError('');
-    setSaveSuccess('');
-    let savedCount = 0;
-    try {
-      for (let i = 0; i < plan.meals.length; i++) {
-        if (savedMeals.has(i)) continue;
-        await saveMeal(mealToPayload(plan.meals[i]));
-        savedCount++;
-        setSavedMeals((prev) => new Set([...prev, i]));
-      }
-      setSaveSuccess(
-        `✅ ${savedCount} repas enregistré${savedCount > 1 ? 's' : ''} dans ton historique !`,
-      );
-    } catch (err) {
-      setError("Erreur lors de la sauvegarde de certains repas.");
-    } finally {
-      setSavingAll(false);
-    }
-  };
-
   const handleSavePlan = async () => {
     if (!plan) return;
     setPlanSaving(true);
@@ -188,7 +124,6 @@ function MealPlan() {
     e.preventDefault();
     setError('');
     setSaveSuccess('');
-    setSavedMeals(new Set());
     setPlanSavedId(null);
     setLoading(true);
     setPlan(null);

@@ -1,6 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 import { getRecommendationsToday, getCoachAdvice } from '../services/api';
+import { AccessibleChart, ChartDataTable } from '../utils/chartA11y';
+import { buildChartSummary } from '../utils/chartA11yHelpers';
+import { activityChartOptions, CHART_PALETTE } from '../components/ChartOptions';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const NUTRIENT_LABELS = {
   calories: { label: 'Calories', unit: 'kcal' },
@@ -66,12 +81,41 @@ function Coach() {
     loadData();
   }, []);
 
+  const macroChart = useMemo(() => {
+    if (!data?.imbalances?.length) {
+      return { labels: [], datasets: [] };
+    }
+    const macroNutrients = ['protein', 'carbohydrates', 'fat'];
+    const rows = data.imbalances.filter((imb) => macroNutrients.includes(imb.nutrient));
+    return {
+      labels: rows.map((imb) => NUTRIENT_LABELS[imb.nutrient]?.label || imb.nutrient),
+      datasets: [
+        {
+          label: 'Consommé',
+          data: rows.map((imb) => imb.eaten),
+          backgroundColor: CHART_PALETTE[0],
+        },
+        {
+          label: 'Cible',
+          data: rows.map((imb) => imb.target),
+          backgroundColor: CHART_PALETTE[1],
+        },
+      ],
+    };
+  }, [data]);
+
+  const macroSummary = buildChartSummary(
+    'Macros du jour — consommé vs cible',
+    macroChart.labels,
+    macroChart.datasets.flatMap((ds) => ds.data),
+  );
+
   if (loading) return <p role="status">Analyse de tes apports en cours…</p>;
 
   if (error) {
     return (
-      <section className="coach-page">
-        <h2>Mon coach nutritionnel</h2>
+      <section className="coach-page" aria-labelledby="coach-title">
+        <h1 id="coach-title">Mon coach nutritionnel</h1>
         <p className="form-error" role="alert">{error}</p>
         <Link to="/onboarding">→ Compléter mon profil</Link>
       </section>
@@ -79,17 +123,39 @@ function Coach() {
   }
 
   return (
-    <section className="coach-page">
+    <section className="coach-page" aria-labelledby="coach-title">
       <header>
-        <h2>Mon coach nutritionnel</h2>
+        <h1 id="coach-title">Mon coach nutritionnel</h1>
         <p className="muted">
           Objectif : <strong>{data.profile.goal_label}</strong>
         </p>
       </header>
 
+      {macroChart.labels.length > 0 && (
+        <AccessibleChart
+          title="Graphique des macronutriments du jour"
+          summary={macroSummary}
+          dataTable={
+            <ChartDataTable
+              caption="Macronutriments — consommé vs cible"
+              headers={['Nutriment', 'Consommé', 'Cible']}
+              rows={macroChart.labels.map((label, i) => [
+                label,
+                macroChart.datasets[0]?.data[i] ?? 0,
+                macroChart.datasets[1]?.data[i] ?? 0,
+              ])}
+            />
+          }
+        >
+          <div className="chart-container">
+            <Bar data={macroChart} options={activityChartOptions} />
+          </div>
+        </AccessibleChart>
+      )}
+
       {/* Cibles vs réel — progress bars */}
       <section aria-labelledby="balance-heading" className="balance-section">
-        <h3 id="balance-heading">Équilibre du jour</h3>
+        <h2 id="balance-heading">Équilibre du jour</h2>
         <ul className="balance-list">
           {data.imbalances.map((imb) => {
             const { label, unit } = NUTRIENT_LABELS[imb.nutrient];
@@ -139,7 +205,7 @@ function Coach() {
 
       {/* Suggestions */}
       <section aria-labelledby="suggestions-heading" className="suggestions-section">
-        <h3 id="suggestions-heading">Recommandations personnalisées</h3>
+        <h2 id="suggestions-heading">Recommandations personnalisées</h2>
         {data.suggestions.length === 0 ? (
           <p className="form-success">
             🎉 Tes apports sont équilibrés aujourd'hui, continue comme ça !
@@ -150,7 +216,7 @@ function Coach() {
               <li key={i} className={`suggestion-card priority-${s.priority}`}>
                 <div className="suggestion-icon" aria-hidden="true">{s.icon}</div>
                 <div className="suggestion-content">
-                  <h4>{s.title}</h4>
+                  <h3>{s.title}</h3>
                   <p>{s.detail}</p>
                 </div>
               </li>
@@ -161,7 +227,7 @@ function Coach() {
 
       {/* Conseils IA via OpenRouter / gpt-oss */}
       <section aria-labelledby="ai-heading" className="ai-section">
-        <h3 id="ai-heading">Conseils détaillés par l'IA</h3>
+        <h2 id="ai-heading">Conseils détaillés par l'IA</h2>
         <p className="muted">
           Demande à notre coach IA (basé sur le modèle open-source gpt-oss-120b)
           des conseils personnalisés adaptés à tes apports du jour.
@@ -186,7 +252,7 @@ function Coach() {
         {aiAdvice && (
           <article className="ai-advice-card" aria-live="polite">
             <header>
-              <h4>🤖 Le coach te dit :</h4>
+              <h3>🤖 Le coach te dit :</h3>
               <small className="muted">Généré par {aiAdvice.model}</small>
             </header>
             <div className="ai-advice-text">

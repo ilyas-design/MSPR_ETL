@@ -540,33 +540,8 @@ class RegisterView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
-    
 
 
-
-
-class UserProfileView(APIView):
-
-    def _get_profile(self, user):
-        # get_or_create pour gérer les vieux users qui n'ont pas de profil
-        # (créés avant l'ajout de UserProfile)
-        profile, _ = UserProfile.objects.get_or_create(user=user)
-        return profile
-    
-    def get(self, request):
-        profile = self._get_profile(request.user)
-        serializer = UserProfileSerializer(profile)
-        return Response(serializer.data)
-
-    def patch(self, request):
-        profile = self._get_profile(request.user)
-        serializer = UserProfileSerializer(profile, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-
-      
-    
 # ---------------------------------------------------------------------------
 # Data ViewSets — ETL tables (read-only, SQLite via db_router)
 # ---------------------------------------------------------------------------
@@ -594,47 +569,8 @@ class ExerciseViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 # ---------------------------------------------------------------------------
-# User layer — registration, profile, meal history (PostgreSQL)
+# User layer — profile, meal history (PostgreSQL)
 # ---------------------------------------------------------------------------
-
-class RegisterView(generics.CreateAPIView):
-    """POST /api/auth/register/ — creates User + UserProfile atomically."""
-
-    permission_classes = [AllowAny]
-
-    def create(self, request, *args, **kwargs):
-        User = get_user_model()
-        username = request.data.get('username')
-        password = request.data.get('password')
-        if not username or not password:
-            return Response(
-                {'detail': 'username and password are required.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if User.objects.filter(username=username).exists():
-            return Response(
-                {'detail': 'Username already taken.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        profile_data = {
-            'goal': request.data.get('goal', 'maintenance'),
-            'daily_calorie_target': request.data.get('daily_calorie_target'),
-            'allergies': request.data.get('allergies', []),
-            'dietary_restrictions': request.data.get('dietary_restrictions', []),
-            'equipment_available': request.data.get('equipment_available', []),
-            'experience_level': request.data.get('experience_level',''),
-        }
-
-        with transaction.atomic():
-            user = User.objects.create_user(username=username, password=password)
-            profile = UserProfile.objects.create(user=user, **profile_data)
-
-        return Response(
-            {'username': user.username, 'profile': UserProfileSerializer(profile).data},
-            status=status.HTTP_201_CREATED,
-        )
-
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
     """GET/PATCH /api/me/profile/ — returns or updates the current user's profile."""
@@ -729,6 +665,7 @@ class MealEntryViewSet(viewsets.ModelViewSet):
 # ---------------------------------------------------------------------------
 
 NUTRITION_API_URL = getattr(django_settings, 'NUTRITION_API_URL', 'http://nutrition-api:8001')
+RECO_ENGINE_URL = getattr(django_settings, 'RECO_ENGINE_URL', 'http://reco-engine:8002')
 
 
 @method_decorator(ratelimit(key='user', rate='10/m', method='POST', block=True), name='dispatch')
@@ -1066,7 +1003,7 @@ class CoachAdviceView(APIView):
             restrictions = []
 
         payload = {
-            'goal': profile.goal or 'maintenance',
+            'goal': profile.goal or 'general_health',
             'goal_label': profile.get_goal_display() if profile.goal else None,
             'totals_today': totals,
             'targets': targets,
@@ -1309,16 +1246,11 @@ class WorkoutSessionViewSet(viewsets.ModelViewSet):
 class AIWorkoutPlanView(APIView):
     """
     POST /api/ai/workout-plan-ai/
-    Proxy vers nutrition-api/workout-plan-ai qui appelle gpt-oss pour générer
-    un plan d'entraînement hebdomadaire personnalisé (chantier 2).
-
-    Enrichit la requête avec l'historique récent de l'utilisateur (pour
-    permettre la rotation des exercices et la progression adaptative).
+    Proxy vers reco-engine/workout-plan-ai (microservice MSPR2 Chantier 2).
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Récupère les 5 dernières séances pour permettre rotation/progression
         recent = list(
             WorkoutSession.objects.filter(user=request.user)
             .order_by('-done_at')[:5]
@@ -1338,7 +1270,7 @@ class AIWorkoutPlanView(APIView):
 
         try:
             resp = httpx.post(
-                f'{NUTRITION_API_URL}/workout-plan-ai',
+                f'{RECO_ENGINE_URL}/workout-plan-ai',
                 json=payload,
                 timeout=110.0,
             )
@@ -1348,7 +1280,7 @@ class AIWorkoutPlanView(APIView):
             if hasattr(exc, 'response') and exc.response is not None:
                 detail = exc.response.text[:300]
             return Response(
-                {'detail': f'Service IA indisponible : {detail}'},
+                {'detail': f'Service reco indisponible : {detail}'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         return Response(resp.json())
@@ -1356,32 +1288,27 @@ class AIWorkoutPlanView(APIView):
 
 class WorkoutPlanListView(APIView):
     """
-    GET  /api/me/workout-plans/  → plans d'entraînement sauvegardés (MongoDB)
-    POST /api/me/workout-plans/  → sauvegarde un nouveau plan
+    GET/POST /api/me/workout-plans/ — gateway JWT ; persistance Mongo via reco-engine.
     """
     permission_classes = [IsAuthenticated]
 
-    def _collection(self):
-        from .mongo import get_db
-        coll = get_db()['workout_plans']
-        coll.create_index([('user_id', 1), ('created_at', -1)])
-        return coll
-
     def get(self, request):
         try:
-            cursor = (
-                self._collection()
-                .find({'user_id': request.user.id})
-                .sort('created_at', -1)
-                .limit(50)
+            resp = httpx.get(
+                f'{RECO_ENGINE_URL}/workout-plans',
+                params={'user_id': request.user.id},
+                timeout=10.0,
             )
-            plans = [_serialize_plan(d) for d in cursor]
-        except PyMongoError as exc:
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            detail = str(exc)
+            if hasattr(exc, 'response') and exc.response is not None:
+                detail = exc.response.text[:300]
             return Response(
-                {'detail': f'MongoDB inaccessible : {exc}'},
+                {'detail': f'Service reco indisponible : {detail}'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        return Response(plans)
+        return Response(resp.json())
 
     def post(self, request):
         plan_data = request.data.get('plan')
@@ -1390,41 +1317,52 @@ class WorkoutPlanListView(APIView):
                 {'detail': 'Le champ "plan" (objet) est requis.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        document = {
+        payload = {
             'user_id': request.user.id,
             'username': request.user.username,
             'title': request.data.get('title') or "Plan d'entraînement IA",
             'plan': plan_data,
             'goal': request.data.get('goal'),
             'level': request.data.get('level'),
-            'created_at': timezone.now(),
         }
         try:
-            result = self._collection().insert_one(document)
-        except PyMongoError as exc:
+            resp = httpx.post(
+                f'{RECO_ENGINE_URL}/workout-plans',
+                json=payload,
+                timeout=10.0,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            detail = str(exc)
+            if hasattr(exc, 'response') and exc.response is not None:
+                detail = exc.response.text[:300]
             return Response(
-                {'detail': f'MongoDB inaccessible : {exc}'},
+                {'detail': f'Service reco indisponible : {detail}'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        document['_id'] = result.inserted_id
-        return Response(_serialize_plan(document), status=status.HTTP_201_CREATED)
+        return Response(resp.json(), status=status.HTTP_201_CREATED)
 
 
 class WorkoutPlanDetailView(APIView):
-    """
-    DELETE /api/me/workout-plans/<id>/ → suppression d'un plan sauvegardé
-    """
+    """DELETE /api/me/workout-plans/<id>/ — suppression via reco-engine."""
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, plan_id):
-        from .mongo import get_db
         try:
-            oid = ObjectId(plan_id)
-        except InvalidId:
-            return Response({'detail': 'ID invalide.'}, status=status.HTTP_400_BAD_REQUEST)
-        result = get_db()['workout_plans'].delete_one(
-            {'_id': oid, 'user_id': request.user.id}
-        )
-        if result.deleted_count == 0:
-            return Response({'detail': 'Plan introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+            resp = httpx.delete(
+                f'{RECO_ENGINE_URL}/workout-plans/{plan_id}',
+                params={'user_id': request.user.id},
+                timeout=10.0,
+            )
+            if resp.status_code == 404:
+                return Response({'detail': 'Plan introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            detail = str(exc)
+            if hasattr(exc, 'response') and exc.response is not None:
+                detail = exc.response.text[:300]
+            return Response(
+                {'detail': f'Service reco indisponible : {detail}'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)

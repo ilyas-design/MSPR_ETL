@@ -20,6 +20,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+.cache/
 
 # Virtual environments
 .venv/
@@ -32,6 +33,7 @@ env/
 .coverage.*
 coverage.xml
 htmlcov/
+coverage/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -39,12 +41,14 @@ htmlcov/
 # ---- Jupyter ----
 .ipynb_checkpoints/
 
-# ---- Node (root-level only; frontend has its own .gitignore) ----
+# ---- Node / frontends ----
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.vite/
 
 # ---- Local databases / artifacts ----
 *.sqlite3
@@ -57,17 +61,25 @@ lerna-debug.log*
 *.db-wal
 *.db-shm
 logs/
+airflow/logs/
 *.log
 
 # ---- Django ----
 staticfiles/
 media/
 
-# ---- ETL artifacts (générés à chaque run par run_pipeline.py / run_monitoring.py) ----
-# On garde le dossier `reports/` versionné via `reports/.gitkeep`,
-# mais pas les rapports eux-mêmes (reproductibles, polluent l'historique).
-reports/etl_report_*.json
-reports/etl_monitoring_*.json
+# ---- Generated reports (reproducible; keep reports/.gitkeep) ----
+reports/*.json
+
+# ---- ML eval dataset (labels versioned; images stay local) ----
+eval_dataset/images/*
+!eval_dataset/images/README.md
+
+# ---- Graphify (generated AST graph; run `graphify update .` locally) ----
+graphify-out/
+
+# ---- Local subject PDF copies (official copies live in docs/) ----
+/*.pdf
 
 # ---- Environment variables ----
 .env
@@ -75,8 +87,5 @@ reports/etl_monitoring_*.json
 .env.*.local
 docker-compose.override.yml
 
-
-.claude
-
-CLAUDE.md 
-
+# ---- Local AI tooling ----
+.claude/

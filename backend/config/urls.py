@@ -64,8 +64,6 @@ urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
-    path('api/auth/register/', RegisterView.as_view(), name='register'),
-    path('api/me/profile/', UserProfileView.as_view(), name='user-profile'),
     path('api/me/recommendations/today/', RecommendationsTodayView.as_view(), name='recommendations-today'),
     path('api/me/coach-advice/', CoachAdviceView.as_view(), name='coach-advice'),
     path('api/ai/meal-plan-ai/', AIMealPlanLLMView.as_view(), name='ai-meal-plan-llm'),

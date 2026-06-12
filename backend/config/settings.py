@@ -107,6 +107,7 @@ CACHES = {
 }
 
 NUTRITION_API_URL = os.environ.get('NUTRITION_API_URL', 'http://nutrition-api:8001')
+RECO_ENGINE_URL = os.environ.get('RECO_ENGINE_URL', 'http://reco-engine:8002')
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'api.pagination.ConfigurablePageNumberPagination',

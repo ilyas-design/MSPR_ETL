@@ -56,7 +56,7 @@ function SignUp() {
           </p>
         </header>
 
-        <form onSubmit={handleSubmit} className="auth-form" noValidate>
+        <form onSubmit={handleSubmit} className="auth-form" noValidate aria-describedby={error ? 'signup-error' : undefined}>
           <div className="auth-field">
             <label htmlFor="signup-email">Email</label>
             <input
@@ -87,7 +87,7 @@ function SignUp() {
           </div>
 
           <div className="auth-field">
-            <label htmlFor="signup-password-confirm">Confirmer</label>
+            <label htmlFor="signup-password-confirm">Confirmer le mot de passe</label>
             <input
               id="signup-password-confirm"
               type="password"
@@ -101,7 +101,7 @@ function SignUp() {
           </div>
 
           {error && (
-            <p className="auth-error" role="alert">{error}</p>
+            <p id="signup-error" className="auth-error" role="alert">{error}</p>
           )}
 
           <button type="submit" className="auth-submit" disabled={loading}>

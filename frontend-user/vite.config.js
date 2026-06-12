@@ -4,7 +4,21 @@ import react from '@vitejs/plugin-react';
 
 // https://vite.dev/config/ 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react({ jsxRuntime: 'automatic' })],
+  esbuild: {
+    jsx: 'automatic',
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.js',
+    css: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary'],
+      include: ['src/**/*.{js,jsx}'],
+      exclude: ['src/test/**', '**/*.test.{js,jsx}'],
+    },
+  },
   server: {
     port: 5174,
     proxy: {

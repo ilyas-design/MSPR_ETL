@@ -1,6 +1,7 @@
 import { useState } from 'react'; 
 import { useNavigate } from 'react-router-dom';
 import { updateMyProfile } from '../services/api';
+import { commaListToArray } from '../utils/chartA11yHelpers';
 
 const GOAL_OPTIONS = [
     { value: 'weight_loss', label: 'Perte de poids' },
@@ -35,6 +36,8 @@ function Onboarding() {
   const [dietaryRestrictions, setDietaryRestrictions] = useState('none');
   const [allergies, setAllergies] = useState('');
   const [equipment, setEquipment] = useState('');
+  const [injuries, setInjuries] = useState('');
+  const [mealBudget, setMealBudget] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -73,6 +76,8 @@ function Onboarding() {
         dietary_restrictions: dietaryRestrictions,
         allergies,
         equipment_available: equipment,
+        injuries: commaListToArray(injuries),
+        meal_budget: mealBudget ? parseInt(mealBudget, 10) : null,
         age: parseInt(age, 10),
         gender,
         height_cm: parseInt(height, 10),
@@ -266,6 +271,36 @@ function Onboarding() {
           <small id="equipment-hint" className="form-hint">
             Sépare les équipements par des virgules. Laisse vide si tu fais du poids du corps uniquement.
           </small>
+        </div>
+
+        <div className="form-field">
+          <label htmlFor="injuries">Blessures / limitations (optionnel)</label>
+          <input
+            id="injuries"
+            type="text"
+            value={injuries}
+            onChange={(event) => setInjuries(event.target.value)}
+            placeholder="Ex : genou, dos, épaule"
+            disabled={loading}
+            aria-describedby="injuries-hint"
+          />
+          <small id="injuries-hint" className="form-hint">
+            Utilisées pour adapter ton programme d&apos;entraînement. Sépare par des virgules.
+          </small>
+        </div>
+
+        <div className="form-field">
+          <label htmlFor="meal-budget">Budget repas hebdo (€, optionnel)</label>
+          <input
+            id="meal-budget"
+            type="number"
+            min="0"
+            max="10000"
+            value={mealBudget}
+            onChange={(event) => setMealBudget(event.target.value)}
+            placeholder="Ex : 80"
+            disabled={loading}
+          />
         </div>
 
         {error && (

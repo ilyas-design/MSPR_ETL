@@ -452,3 +452,149 @@ class TestKPIViewsUnit(APITestCase):
             resp5 = api_views.DataQualityKPIView.as_view()(req5)
             self.assertEqual(resp5.status_code, 200)
             self.assertIn("overall_data_quality", resp5.data)
+
+
+class TestMSPR2RegisterAndProfile(APITestCase):
+    def test_register_success_returns_jwt(self):
+        resp = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'newcoach',
+                'email': 'coach@example.com',
+                'password': 'StrongPass123!',
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertIn('access', resp.data)
+        self.assertIn('refresh', resp.data)
+        self.assertTrue(User.objects.filter(username='newcoach').exists())
+
+    def test_register_rejects_short_password(self):
+        resp = self.client.post(
+            '/api/auth/register/',
+            {'username': 'x', 'password': 'short'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_rejects_duplicate_username(self):
+        User.objects.create_user(username='dup', password='StrongPass123!')
+        resp = self.client.post(
+            '/api/auth/register/',
+            {'username': 'dup', 'password': 'StrongPass123!'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_profile_get_and_patch(self):
+        user = User.objects.create_user(username='profileuser', password='StrongPass123!')
+        self.client.force_authenticate(user)
+
+        get_resp = self.client.get('/api/me/profile/')
+        self.assertEqual(get_resp.status_code, status.HTTP_200_OK)
+        self.assertIn('goal', get_resp.data)
+
+        patch_resp = self.client.patch(
+            '/api/me/profile/',
+            {
+                'goal': 'muscle_gain',
+                'experience_level': 'beginner',
+                'injuries': ['genou'],
+                'meal_budget': 120,
+            },
+            format='json',
+        )
+        self.assertEqual(patch_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_resp.data['goal'], 'muscle_gain')
+        self.assertEqual(patch_resp.data['injuries'], ['genou'])
+        self.assertEqual(patch_resp.data['meal_budget'], 120)
+
+
+class TestMSPR2AIProxies(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='aiuser', password='StrongPass123!')
+        self.client.force_authenticate(self.user)
+
+    @patch('api.views.cache.get', return_value=None)
+    @patch('api.views.httpx.post')
+    def test_ai_analyze_proxies_nutrition_api(self, mock_post, _mock_cache):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = [
+            {
+                'label': 'apple_pie',
+                'score': 0.91,
+                'matched_food': 'Apple Pie',
+                'macros': {'avg_calories': 250, 'avg_protein': 3, 'avg_carbohydrates': 35, 'avg_fat': 12},
+            }
+        ]
+        mock_resp.raise_for_status = MagicMock()
+        mock_post.return_value = mock_resp
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        image = SimpleUploadedFile(
+            'meal.jpg',
+            b'\xff\xd8\xff\xe0' + b'\x00' * 64,
+            content_type='image/jpeg',
+        )
+        resp = self.client.post('/api/ai/analyze/', {'file': image}, format='multipart')
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data[0]['label'], 'apple_pie')
+        mock_post.assert_called_once()
+        from .models import MealEntry
+        self.assertEqual(MealEntry.objects.filter(user=self.user).count(), 1)
+
+    def test_ai_analyze_requires_file(self):
+        resp = self.client.post('/api/ai/analyze/', {}, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch('api.views.httpx.post')
+    def test_workout_plan_ai_proxies_reco_engine(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            'plan': {'sessions': []},
+            'model': 'rule-based',
+        }
+        mock_resp.raise_for_status = MagicMock()
+        mock_post.return_value = mock_resp
+
+        resp = self.client.post(
+            '/api/ai/workout-plan-ai/',
+            {
+                'goal': 'general_health',
+                'experience_level': 'beginner',
+                'limitations': ['genou'],
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('plan', resp.data)
+        called_url = mock_post.call_args.args[0]
+        self.assertIn('/workout-plan-ai', called_url)
+
+    @patch('api.views.httpx.get')
+    def test_workout_plans_list_proxies_reco_engine(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = [{'id': 'abc123', 'title': 'Plan test'}]
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+
+        resp = self.client.get('/api/me/workout-plans/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+        mock_get.assert_called_once()
+
+    @patch('api.views.httpx.post')
+    @patch('django_ratelimit.decorators.is_ratelimited', return_value=True)
+    def test_ai_analyze_rate_limited_returns_429(self, _mock_rl, mock_post):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        image = SimpleUploadedFile('meal.jpg', b'fake', content_type='image/jpeg')
+        resp = self.client.post('/api/ai/analyze/', {'file': image}, format='multipart')
+        self.assertIn(
+            resp.status_code,
+            (status.HTTP_429_TOO_MANY_REQUESTS, status.HTTP_403_FORBIDDEN),
+        )
+        mock_post.assert_not_called()
