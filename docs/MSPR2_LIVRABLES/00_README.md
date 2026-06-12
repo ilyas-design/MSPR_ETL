@@ -15,6 +15,8 @@ ici en un fichier dédié.
 | 05 | [Métriques de performance IA](05_METRIQUES_IA.md) | Précision, rappel, F1 du modèle vision |
 | 06 | [Accessibilité WCAG/RGAA](06_ACCESSIBILITE.md) | Page déclaration + audit |
 | 07 | [Conduite du changement](07_CONDUITE_CHANGEMENT.md) | Accompagnement et adoption |
+| 08 | [Maquettes d'interface](08_MAQUETTES.md) | Maquettes responsive + design system |
+| 09 | [Support de soutenance](09_SUPPORT_SOUTENANCE.md) | Slides (Marp) + Q&A pitch 20 min |
 
 ## Documents complémentaires (déjà présents dans `docs/`)
 

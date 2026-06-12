@@ -152,6 +152,7 @@ function NavItem({ to, children }) {
 function NavDropdown({ label, icon, items, matchPaths = [], extraMatch }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const triggerRef = useRef(null);
   const location = useLocation();
 
   // État actif : si on est sur l'un des paths du groupe
@@ -176,12 +177,22 @@ function NavDropdown({ label, icon, items, matchPaths = [], extraMatch }) {
     setOpen(false);
   }, [location.pathname, location.search]);
 
+  // Échap ferme le menu et rend le focus au bouton déclencheur (RGAA 7.3 / WCAG 2.1.2)
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape' && open) {
+      setOpen(false);
+      triggerRef.current?.focus();
+    }
+  };
+
   return (
     <div
       ref={dropdownRef}
       className={`nav-dropdown ${open ? 'open' : ''} ${isActive ? 'active' : ''}`}
+      onKeyDown={handleKeyDown}
     >
       <button
+        ref={triggerRef}
         type="button"
         className="nav-item nav-dropdown-trigger"
         aria-haspopup="true"
@@ -212,7 +223,7 @@ function NavDropdown({ label, icon, items, matchPaths = [], extraMatch }) {
                 }
                 role="menuitem"
               >
-                <span className="nav-dropdown-item-icon">{item.icon}</span>
+                <span className="nav-dropdown-item-icon" aria-hidden="true">{item.icon}</span>
                 <span className="nav-dropdown-item-text">
                   <span className="nav-dropdown-item-label">{item.label}</span>
                   {item.desc && (

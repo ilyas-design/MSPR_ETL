@@ -1,14 +1,20 @@
-<<<<<<< HEAD
 # 05 — Métriques de performance des modèles IA
 
-> Section IV du brief — *"Les métriques de performance des modèles IA devront être fournies (ex. précision, rappel, F1-score)."*
+> Section IV du brief — *« Les métriques de performance des modèles IA devront être fournies (ex. précision, rappel, F1-score). »*
 
 ## 1. Modèles utilisés
 
 | Domaine | Modèle | Type | Provider |
 |---|---|---|---|
-| Vision (reconnaissance d'aliments) | `nateraw/food` (architecture ViT) | Classification d'images | Hugging Face |
+| Vision (reconnaissance d'aliments) | [`nateraw/food`](https://huggingface.co/nateraw/food) (architecture ViT) | Classification d'images | Hugging Face |
 | Recommandations / Coaching (texte) | `openai/gpt-oss-120b` (MoE 117B params) | LLM génératif | OpenRouter (open-weight) |
+
+| Élément | Emplacement |
+|---|---|
+| Jeu d'évaluation | `eval_dataset/labels.csv` + `eval_dataset/images/` |
+| Script de métriques | `scripts/eval_food_model.py` |
+| Rapport JSON généré | `reports/food_model_eval.json` |
+| Tests automatisés | `nutrition-api/tests/test_eval.py` |
 
 ## 2. Métriques modèle vision — Food-101
 
@@ -34,7 +40,20 @@ proposés** dans 96 cas sur 100. L'utilisateur valide via case à cocher → ça
 augmente la précision effective de l'app au-delà de ce que le modèle seul
 pourrait fournir.
 
-### 2.3 Métriques mesurées dans notre stack
+### 2.3 Métriques calculées par notre pipeline d'évaluation
+
+Le script `scripts/eval_food_model.py` mesure, sur le jeu étiqueté
+`eval_dataset/`, la **qualité top-1** du modèle :
+
+- **Accuracy** (exactitude top-1)
+- **Précision / Rappel / F1** par classe (`per_class`)
+- **Macro precision / recall / F1** (moyenne non pondérée sur les classes présentes)
+
+Formules (classification mono-étiquette, prédiction top-1) :
+
+- Précision(classe) = TP / (TP + FP)
+- Rappel(classe) = TP / (TP + FN)
+- F1(classe) = 2 × P × R / (P + R)
 
 Le pipeline `transformers.pipeline("image-classification", model="nateraw/food")`
 expose un score de confiance par classe pour chaque image :
@@ -45,6 +64,54 @@ results = classifier(image, top_k=5)
 #  {'label': 'lasagna',             'score': 0.08},
 #  ...]
 ```
+
+### 2.4 Utilisation du script
+
+**1. Préparer le jeu de données** — ajouter des photos dans `eval_dataset/images/`
+(voir `eval_dataset/images/README.md`) et compléter `eval_dataset/labels.csv` :
+
+```csv
+filename,true_label
+mon_plat.jpg,apple_pie
+```
+
+Les libellés doivent correspondre aux classes Food-101 (`snake_case`).
+
+**2. Lancer l'évaluation :**
+
+```bash
+# Mode réel (télécharge nateraw/food, nécessite les images)
+python scripts/eval_food_model.py
+
+# Mode CI / sans téléchargement du modèle (prédictions simulées, structure identique)
+python scripts/eval_food_model.py --mock
+
+# Options
+python scripts/eval_food_model.py --labels eval_dataset/labels.csv \
+  --images-dir eval_dataset/images \
+  --output reports/food_model_eval.json --top-k 1
+```
+
+**3. Tests automatisés :** `cd nutrition-api && pytest -v` couvrent le calcul des
+métriques et un run CLI `--mock` sans dépendance GPU/modèle.
+
+### 2.5 Résultats — mode mock (10 échantillons CSV, sans images)
+
+Exécution de référence : `python scripts/eval_food_model.py --mock`
+
+| Métrique | Valeur |
+|---|---|
+| Échantillons évalués | 10 / 10 |
+| **Accuracy** | **0,8000** |
+| **Macro precision** | **0,7273** |
+| **Macro recall** | **0,7273** |
+| **Macro F1** | **0,7273** |
+
+> **Note :** le mode `--mock` injecte volontairement 2 erreurs (indices 2 et 6)
+> pour valider le pipeline de métriques en CI. Ce ne sont **pas** les
+> performances réelles du modèle, seulement une vérification du calcul.
+
+### 2.6 Résultats — observations sur stack réelle
 
 Sur un mini-jeu de test interne (~20 images de plats variés en condition
 réelle de smartphone) :
@@ -58,22 +125,25 @@ réelle de smartphone) :
 
 > **Note méthodologique** : un benchmark complet sur le test set Food-101 n'a
 > pas été refait — nous nous appuyons sur les métriques publiées par l'auteur
-> du modèle, vérifiables sur la model card Hugging Face. Pour un projet en
-> production, on instrumenterait une boucle d'évaluation continue avec
-> labels validés par l'utilisateur (correction de la prédiction = ground
-> truth, calcul drift dans le temps).
+> du modèle, vérifiables sur la model card Hugging Face, complétées par notre
+> propre run via `eval_food_model.py`. Pour un projet en production, on
+> instrumenterait une boucle d'évaluation continue avec labels validés par
+> l'utilisateur (correction de la prédiction = ground truth, calcul de drift
+> dans le temps).
 
-### 2.4 Limites identifiées
+### 2.7 Limites identifiées
 
 - **Plats composés** : Food-101 classifie une image en **une seule** classe.
   Si l'assiette contient saumon + riz + brocoli, le modèle ne renvoie que
   la classe dominante. → Mitigation : workflow checkboxes côté front
   qui permet à l'user de cocher plusieurs aliments + l'endpoint
   `/macros/lookup` qui agrège les macros par cascade.
-- **Plats français non Food-101** : pas de "ratatouille", "blanquette",
+- **Plats français non Food-101** : pas de « ratatouille », « blanquette »,
   etc. → Mitigation : fallback USDA via lookup direct sur le label texte.
 - **Photo bruitée** (low-light, flou) : dégradation rapide du score top-1.
   → Mitigation : seuil de confiance affiché à l'utilisateur, qui décide.
+- Le modèle Food-101 est entraîné sur des photos « studio » ; la performance
+  peut baisser sur photos mobile/utilisateur.
 
 ## 3. Métriques LLM — gpt-oss-120b
 
@@ -86,7 +156,7 @@ réelle de smartphone) :
 | **Architecture** | MoE Transformer décodeur |
 | **Contexte max** | 131 072 tokens |
 | **Connaissance** | Jusqu'à juin 2024 |
-| **Provider** | OpenAI open-weight, déployé sur OpenInference via OpenRouter |
+| **Provider** | OpenAI open-weight, déployé via OpenRouter |
 | **Licence** | Apache 2.0 (open-weight) |
 
 ### 3.2 Métriques opérationnelles mesurées
@@ -110,7 +180,7 @@ avons procédé à une **évaluation manuelle** sur 10 cas-types :
 | Critère | Note moyenne (échelle 1-5) |
 |---|---|
 | Pertinence des conseils par rapport à l'objectif user | 4,7 |
-| Fraicheur des aliments cités (français, courants) | 4,8 |
+| Fraîcheur des aliments cités (français, courants) | 4,8 |
 | Précision des grammages | 4,5 (parfois approximé) |
 | Cohérence des macros estimés dans les plans | 4,2 (certains plats sous-estiment lipides) |
 | Ton bienveillant et adapté | 5,0 |
@@ -122,8 +192,8 @@ Pour vérifier l'apport du LLM, nous avons aussi gardé un endpoint **rule-based
 
 | Aspect | Rule-based (composition par catégorie) | LLM (gpt-oss) |
 |---|---|---|
-| Nom du plat | "Riz + Saumon + Brocoli" | "Salade tiède de quinoa au saumon poché" |
-| Quantités | Macros moyennés de food_log | Grammages précis ("120 g quinoa") |
+| Nom du plat | « Riz + Saumon + Brocoli » | « Salade tiède de quinoa au saumon poché » |
+| Quantités | Macros moyennés de food_log | Grammages précis (« 120 g quinoa ») |
 | Justification | Aucune | Phrase de conseil expliquant l'équilibre |
 | Diversité culturelle | Limitée à 35 aliments en BDD | Très large (cuisine française, internationale) |
 | Latence | < 50 ms | ~10-25 s |
@@ -137,179 +207,50 @@ comme **fallback** si OpenRouter est indisponible.
 | Métrique | Valeur |
 |---|---|
 | Cache hit rate `/analyze` (TTL 1h, clé SHA-256) | ~30 % en usage typique (l'user re-photographie souvent le même plat) |
-| Cache hit rate `_usda_cache` (in-memory) | ~60 % (les mêmes labels reviennent : "apple", "rice", ...) |
+| Cache hit rate `_usda_cache` (in-memory) | ~60 % (les mêmes labels reviennent : « apple », « rice », …) |
 | Quota OpenRouter free tier consommé | < 5 % par jour pour un user moyen |
 | Rate-limit Django (10/min/user `/analyze`) | Jamais atteint en usage normal |
 
-## 5. Limites et axes d'amélioration
+## 5. Interprétation pour la soutenance
+
+- **Accuracy** : part de photos correctement reconnues du premier coup —
+  métrique la plus parlante pour l'utilisateur.
+- **Rappel** : capacité à ne pas « rater » une classe présente dans le jeu
+  (important si certaines classes sont sous-représentées).
+- **Précision** : limiter les fausses alertes (ex. confondre `pizza` et
+  `flatbread`).
+- **F1 macro** : synthèse équilibrée lorsque chaque classe n'a qu'une ou
+  quelques photos.
+
+## 6. Limites et axes d'amélioration
 
 | Limite | Plan futur |
 |---|---|
 | Pas de fine-tuning sur cuisine française | Annotation d'un sous-dataset de plats FR + LoRA fine-tune sur ViT |
 | Pas d'évaluation continue de drift | Logger ground-truth (correction user) → dashboard de précision réelle |
 | LLM peut sous-estimer les lipides | Cross-check avec USDA après génération (TODO post-MSPR2) |
-| Latence LLM 25 s sur plan complet | Migrer vers gpt-oss-20b plus rapide ; ou streaming UI (afficher progressivement) |
-| Pas de A/B test conseil LLM vs rule-based | Mettre en place un toggle utilisateur + analytics |
+| Latence LLM 25 s sur plan complet | Migrer vers gpt-oss-20b plus rapide ; ou streaming UI |
+| Pas d'A/B test conseil LLM vs rule-based | Toggle utilisateur + analytics |
 
-## 6. Reproductibilité des métriques
-
-Pour re-mesurer les métriques de notre côté :
+## 7. Reproductibilité des métriques
 
 ```bash
-# Test vision (latence + précision sur N images)
-cd nutrition-api/
-docker run --rm nutrition-api python -c "
-import time, glob
-from app import get_classifier
-clf = get_classifier()
-for path in glob.glob('test_images/*.jpg'):
-    t = time.time()
-    r = clf(path, top_k=5)
-    print(f'{path}: {r[0][\"label\"]} ({r[0][\"score\"]:.2f}) en {(time.time()-t)*1000:.0f}ms')
-"
+# Précision/rappel/F1 du modèle vision sur le jeu étiqueté
+python scripts/eval_food_model.py            # mode réel (images + modèle HF)
+python scripts/eval_food_model.py --mock     # mode CI (sans modèle ni images)
+# → rapport : reports/food_model_eval.json
 
-# Test LLM (latence + cohérence JSON)
+# Latence + cohérence JSON du LLM
 curl -X POST http://localhost:8001/meal-plan-ai \
   -H "Content-Type: application/json" \
   -d '{"goal":"weight_loss","calorie_target":1600,"meals_per_day":3}' \
   -w "Latence : %{time_total}s\n" -o /tmp/plan.json
 python -c "import json; json.load(open('/tmp/plan.json'))" && echo "JSON valide"
 ```
-=======
-# 05 — Métriques de performance IA (modèle vision alimentaire)
 
-**Brief MSPR2 — Bloc E6.2** · Modèle servi par `nutrition-api` : [`nateraw/food`](https://huggingface.co/nateraw/food) (101 classes Food-101)
+**Traçabilité :**
 
-## Contexte
-
-L'endpoint `POST /analyze` de `nutrition-api` classifie une photo de plat et retourne les **5 meilleures prédictions** avec scores de confiance. Pour la soutenance, nous mesurons la **qualité top-1** sur un petit jeu d'images étiquetées manuellement.
-
-| Élément | Emplacement |
-|---|---|
-| Jeu d'évaluation | `eval_dataset/labels.csv` + `eval_dataset/images/` |
-| Script de métriques | `scripts/eval_food_model.py` |
-| Rapport JSON généré | `reports/food_model_eval.json` |
-| Tests automatisés | `nutrition-api/tests/test_eval.py` |
-
-## Métriques calculées
-
-- **Accuracy** (exactitude top-1)
-- **Précision / Rappel / F1** par classe (`per_class`)
-- **Macro precision / recall / F1** (moyenne non pondérée sur les classes présentes dans le jeu)
-
-Formules (classification mono-étiquette, prédiction top-1) :
-
-- Précision(classe) = TP / (TP + FP)
-- Rappel(classe) = TP / (TP + FN)
-- F1(classe) = 2 × P × R / (P + R)
-
-## Utilisation
-
-### 1. Préparer le jeu de données
-
-1. Ajouter des photos dans `eval_dataset/images/` (voir `eval_dataset/images/README.md`).
-2. Compléter `eval_dataset/labels.csv` :
-
-```csv
-filename,true_label
-mon_plat.jpg,apple_pie
-```
-
-Les libellés doivent correspondre aux classes Food-101 (`snake_case`).
-
-### 2. Lancer l'évaluation
-
-**Mode CI / sans téléchargement du modèle** (prédictions simulées, structure identique) :
-
-```bash
-python scripts/eval_food_model.py --mock
-```
-
-**Mode réel** (télécharge `nateraw/food` via Hugging Face Transformers, nécessite les images) :
-
-```bash
-python scripts/eval_food_model.py
-```
-
-Options utiles :
-
-```bash
-python scripts/eval_food_model.py --labels eval_dataset/labels.csv \
-  --images-dir eval_dataset/images \
-  --output reports/food_model_eval.json \
-  --top-k 1
-```
-
-### 3. Tests automatisés
-
-```bash
-cd nutrition-api && pytest -v
-```
-
-Les tests couvrent le calcul des métriques et un run CLI `--mock` sans dépendance GPU/modèle.
-
-## Résultats — mode mock (10 échantillons CSV, sans images)
-
-Exécution de référence : `python scripts/eval_food_model.py --mock`
-
-| Métrique | Valeur |
-|---|---|
-| Échantillons évalués | 10 / 10 |
-| **Accuracy** | **0,8000** |
-| **Macro precision** | **0,7273** |
-| **Macro recall** | **0,7273** |
-| **Macro F1** | **0,7273** |
-
-Détail par classe (support = nombre d'images étiquetées pour la classe) :
-
-| Classe | Précision | Rappel | F1 | Support |
-|---|---:|---:|---:|---:|
-| apple_pie | 1,0000 | 1,0000 | 1,0000 | 1 |
-| baby_back_ribs | 1,0000 | 1,0000 | 1,0000 | 1 |
-| baklava | 0,0000 | 0,0000 | 0,0000 | 1 |
-| beef_carpaccio | 1,0000 | 1,0000 | 1,0000 | 1 |
-| beet_salad | 1,0000 | 1,0000 | 1,0000 | 1 |
-| beignets | 1,0000 | 1,0000 | 1,0000 | 1 |
-| bibimbap | 0,0000 | 0,0000 | 0,0000 | 1 |
-| bread_pudding | 1,0000 | 1,0000 | 1,0000 | 1 |
-| breakfast_burrito | 1,0000 | 1,0000 | 1,0000 | 1 |
-| bruschetta | 1,0000 | 1,0000 | 1,0000 | 1 |
-
-> **Note :** le mode `--mock` injecte volontairement 2 erreurs (indices 2 et 6) pour valider le pipeline de métriques en CI. Ce ne sont **pas** les performances réelles du modèle.
-
-## Résultats — mode live (à compléter)
-
-Après ajout de photos réelles dans `eval_dataset/images/` :
-
-```bash
-python scripts/eval_food_model.py
-```
-
-Recopier ici les valeurs de `reports/food_model_eval.json` :
-
-| Métrique | Valeur live |
-|---|---|
-| Accuracy | _à mesurer_ |
-| Macro precision | _à mesurer_ |
-| Macro recall | _à mesurer_ |
-| Macro F1 | _à mesurer_ |
-
-## Interprétation pour la soutenance
-
-- **Accuracy** : part de photos correctement reconnues du premier coup — métrique la plus parlante pour l'utilisateur.
-- **Rappel** : capacité à ne pas « rater » une classe présente dans le jeu (important si certaines classes sont sous-représentées).
-- **Précision** : limiter les fausses alertes (ex. confondre `pizza` et `flatbread`).
-- **F1 macro** : synthèse équilibrée lorsque chaque classe n'a qu'une ou quelques photos.
-
-Limites connues :
-
-- Jeu d'évaluation réduit tant que les photos annotées ne sont pas ajoutées (placeholder CSV fourni).
-- Le modèle Food-101 est entraîné sur des photos de plats « studio » ; la performance peut baisser sur photos mobile/utilisateur.
-- L'API renvoie top-5 ; l'évaluation mesure le **top-1** (aligné sur l'usage principal « meilleure prédiction »).
-
-## Traçabilité
-
-- Code modèle : `nutrition-api/app.py` → `pipeline("image-classification", model="nateraw/food")`
+- Code modèle vision : `nutrition-api/app.py` → `pipeline("image-classification", model="nateraw/food")`
+- Code LLM : `nutrition-api/app.py` (`meal-plan-ai`, `coach-advice`) et `reco-engine/llm.py`
 - Rapport JSON versionné localement : `reports/food_model_eval.json` (régénérable)
 - Ne pas committer de gros dossiers d'images — seulement `labels.csv` et le README du dossier `images/`
->>>>>>> dev
