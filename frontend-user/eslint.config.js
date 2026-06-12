@@ -17,9 +17,21 @@ export default defineConfig([
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
     ],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        ecmaFeatures: { jsx: true },
+        sourceType: 'module',
+      },
+    },
     rules: {
       'react-hooks/set-state-in-effect': 'off',
-      'no-unused-vars': ['error', { varsIgnorePattern: '^_', caughtErrors: 'none' }],
+      // `^[A-Z_]` ignores PascalCase components used in JSX (no eslint-plugin-react
+      // here, so JSX usage isn't tracked) and underscore-prefixed throwaways —
+      // same convention as the admin `frontend/`.
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', caughtErrors: 'none' }],
       ...jsxA11y.configs.recommended.rules,
       // Critical RGAA-related rules enforced as errors (not warn)
       'jsx-a11y/alt-text': 'error',
@@ -30,10 +42,6 @@ export default defineConfig([
       'jsx-a11y/click-events-have-key-events': 'error',
       'jsx-a11y/interactive-supports-focus': 'error',
       'jsx-a11y/role-has-required-aria-props': 'error',
-    },
-    languageOptions: {
-      globals: globals.browser,
-      parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
 ])

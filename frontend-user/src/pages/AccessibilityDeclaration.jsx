@@ -38,15 +38,17 @@ function AccessibilityDeclaration() {
         <h2 id="a11y-tested" className="section-title">Périmètre testé</h2>
         <ul>
           <li>Connexion (<code>/login</code>) et inscription (<code>/register</code>)</li>
-          <li>Tableau de bord (<code>/dashboard</code>)</li>
           <li>Analyse photo de repas (<code>/meal-analysis</code>)</li>
-          <li>Coach nutritionnel (<code>/coach</code>)</li>
-          <li>Plan d&apos;entraînement IA (<code>/workout-plan</code>)</li>
+          <li>Onboarding (<code>/onboarding</code>) et profil (<code>/profile</code>)</li>
+          <li>Tableau de bord (<code>/dashboard</code>) et coach nutritionnel (<code>/coach</code>)</li>
+          <li>Plan de repas IA (<code>/meal-plan</code>) et plan d&apos;entraînement IA (<code>/workout-plan</code>)</li>
+          <li>Plans sauvegardés (<code>/saved-plans</code>) et historique des séances (<code>/workout-history</code>)</li>
           <li>Navigation principale (menus Repas / Sport)</li>
         </ul>
         <p className="muted">
-          Non couvert par l&apos;audit automatisé récent : onboarding, profil,
-          historiques, plans sauvegardés, page d&apos;accueil publique.
+          Chaque page testée fait l&apos;objet d&apos;un test axe-core automatisé
+          (Vitest), soit 10 pages. Seule la page d&apos;accueil publique n&apos;a pas
+          encore de test axe dédié.
         </p>
       </section>
 
@@ -64,16 +66,6 @@ function AccessibilityDeclaration() {
         <h2 id="a11y-nonconform" className="section-title">Non-conformités et écarts connus</h2>
         <ul>
           <li>
-            <strong>Contraste (critère 3.2)</strong> : certains textes secondaires
-            (<code>.muted</code>, pastilles du dashboard) peuvent être sous le ratio
-            4,5:1 sur fond clair ou dégradé.
-          </li>
-          <li>
-            <strong>Animations (critère 13.8)</strong> : les transitions CSS ne sont pas
-            toutes désactivées lorsque <code>prefers-reduced-motion: reduce</code> est
-            actif.
-          </li>
-          <li>
             <strong>Graphiques Chart.js (critères 1.1 / 1.3)</strong> : un résumé textuel
             et un tableau masqué visuellement accompagnent les graphiques principaux, mais
             l&apos;interaction canvas reste limitée au pointeur.
@@ -87,14 +79,33 @@ function AccessibilityDeclaration() {
             <strong>Messages d&apos;erreur réseau (critère 11.10)</strong> : parfois
             génériques (« une erreur est survenue ») sans détail actionnable.
           </li>
+        </ul>
+        <h3 className="section-subtitle">Écarts corrigés lors du dernier audit</h3>
+        <ul>
           <li>
-            <strong>Pages non auditées</strong> : MealPlan, SavedPlans, WorkoutHistory,
-            Onboarding et Profile n&apos;ont pas encore de tests axe automatisés.
+            <strong>Contraste (critère 3.2)</strong> : le jeton de texte secondaire le
+            plus clair a été assombri (stone-500) pour atteindre un ratio ≥ 4,5:1 sur
+            fond clair.
           </li>
           <li>
-            <strong>Upload de fichiers</strong> : la zone de dépôt repose sur un
-            <code>input type=&quot;file&quot;</code> natif masqué ; compatible clavier
-            via le label associé, mais l&apos;expérience varie selon le navigateur.
+            <strong>Animations (critère 13.8)</strong> : un bloc{' '}
+            <code>@media (prefers-reduced-motion: reduce)</code> neutralise désormais
+            transitions, animations et défilements animés.
+          </li>
+          <li>
+            <strong>Upload de fichiers (critère 10.1)</strong> : l&apos;<code>input
+            type=&quot;file&quot;</code> est masqué visuellement mais reste focusable au
+            clavier, avec un anneau de focus visible sur la zone de dépôt.
+          </li>
+          <li>
+            <strong>Barres de progression (critère 7.1)</strong> : ajout d&apos;un nom
+            accessible (<code>aria-label</code>) sur l&apos;indicateur de calories et
+            correction d&apos;une valeur <code>aria-valuenow</code> invalide
+            (<code>NaN</code>) quand la cible nutritionnelle est nulle.
+          </li>
+          <li>
+            <strong>Ordre des titres (critère 9.1)</strong> : hiérarchie corrigée sur
+            le tableau de bord et le coach (h1 → h2 → h3 sans saut de niveau).
           </li>
         </ul>
       </section>
@@ -102,7 +113,7 @@ function AccessibilityDeclaration() {
       <section className="section" aria-labelledby="a11y-tools">
         <h2 id="a11y-tools" className="section-title">Outils d&apos;évaluation</h2>
         <ul>
-          <li>axe-core via jest-axe (tests Vitest sur Login et SignUp)</li>
+          <li>axe-core via jest-axe (tests Vitest sur 10 pages)</li>
           <li>ESLint <code>eslint-plugin-jsx-a11y</code> (règles critiques en erreur, CI)</li>
           <li>Tests clavier manuels (Tab, Entrée, Échap sur menus)</li>
           <li>Lighthouse accessibilité (Chrome DevTools)</li>

@@ -182,7 +182,14 @@ function Dashboard() {
             {kcalEaten}
             <span className="stat-unit">/ {kcalTarget} kcal</span>
           </p>
-          <div className="stat-bar" role="progressbar" aria-valuenow={kcalPercent} aria-valuemin={0} aria-valuemax={100}>
+          <div
+            className="stat-bar"
+            role="progressbar"
+            aria-valuenow={kcalPercent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Calories : ${kcalEaten} sur ${kcalTarget} kcal`}
+          >
             <div className="stat-bar-fill" style={{ width: `${kcalPercent}%` }} />
           </div>
           <footer className="stat-footer">
@@ -204,14 +211,14 @@ function Dashboard() {
           <div
             className="stat-bar"
             role="progressbar"
-            aria-valuenow={Math.min(100, Math.round((proteinEaten / proteinTarget) * 100))}
+            aria-valuenow={proteinTarget > 0 ? Math.min(100, Math.round((proteinEaten / proteinTarget) * 100)) : 0}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={`Protéines : ${proteinEaten} g sur ${proteinTarget} g`}
           >
             <div
               className="stat-bar-fill stat-bar-fill-accent"
-              style={{ width: `${Math.min(100, (proteinEaten / proteinTarget) * 100)}%` }}
+              style={{ width: `${proteinTarget > 0 ? Math.min(100, (proteinEaten / proteinTarget) * 100) : 0}%` }}
             />
           </div>
           <footer className="stat-footer">
@@ -251,9 +258,9 @@ function Dashboard() {
 
       {weeklyActivity.length > 0 && (
         <section className="dashboard-chart-section" aria-labelledby="activity-chart-heading">
-          <h3 id="activity-chart-heading" className="dashboard-section-title">
+          <h2 id="activity-chart-heading" className="dashboard-section-title">
             Activité sur 7 jours
-          </h3>
+          </h2>
           <div className="chart-container">
             <AccessibleChart
               title="Activité sur 7 jours"
@@ -277,12 +284,12 @@ function Dashboard() {
       )}
 
       {/* ACTIONS RAPIDES — ce que l'user peut faire maintenant */}
-      <h3 className="dashboard-section-title">Que veux-tu faire ?</h3>
+      <h2 className="dashboard-section-title">Que veux-tu faire ?</h2>
       <div className="dashboard-cards">
         <Link to="/meal-analysis" className="card-link" aria-label="Analyser un repas — photo vers macros et suggestions IA">
           <article className="dashboard-card action-card">
             <span className="action-icon">📸</span>
-            <h4>Analyser un repas</h4>
+            <h3>Analyser un repas</h3>
             <p>Photo de ton assiette → macros + suggestions IA.</p>
             <span className="action-arrow">→</span>
           </article>
@@ -291,7 +298,7 @@ function Dashboard() {
         <Link to="/coach" className="card-link" aria-label="Mon coach IA — conseils nutritionnels personnalisés">
           <article className="dashboard-card action-card">
             <span className="action-icon">🧠</span>
-            <h4>Mon coach IA</h4>
+            <h3>Mon coach IA</h3>
             <p>Conseils détaillés générés par gpt-oss selon ton profil.</p>
             <span className="action-arrow">→</span>
           </article>
@@ -300,7 +307,7 @@ function Dashboard() {
         <Link to="/meal-plan" className="card-link" aria-label="Plan repas IA — menu sur mesure">
           <article className="dashboard-card action-card">
             <span className="action-icon">🍽️</span>
-            <h4>Plan repas IA</h4>
+            <h3>Plan repas IA</h3>
             <p>Génère un menu sur mesure pour le reste de la journée.</p>
             <span className="action-arrow">→</span>
           </article>
@@ -309,7 +316,7 @@ function Dashboard() {
         <Link to="/workout-plan" className="card-link" aria-label="Mon programme d'entraînement personnalisé">
           <article className="dashboard-card action-card">
             <span className="action-icon">🏋️</span>
-            <h4>Mon programme</h4>
+            <h3>Mon programme</h3>
             <p>Plan d'entraînement personnalisé selon objectif & matériel.</p>
             <span className="action-arrow">→</span>
           </article>
@@ -317,10 +324,10 @@ function Dashboard() {
       </div>
 
       {/* PROFIL DÉTAILLÉ — mesures + préférences (collapsible) */}
-      <h3 className="dashboard-section-title">Mon profil</h3>
+      <h2 className="dashboard-section-title">Mon profil</h2>
       <div className="dashboard-cards two-cols">
         <article className="dashboard-card">
-          <h4>📏 Mes mesures</h4>
+          <h3>📏 Mes mesures</h3>
           <ul className="metric-list">
             <li><span>Âge</span><span>{profile.age ? `${profile.age} ans` : '—'}</span></li>
             <li><span>Genre</span><span>{GENDER_LABELS[profile.gender] || '—'}</span></li>
@@ -349,7 +356,7 @@ function Dashboard() {
         </article>
 
         <article className="dashboard-card">
-          <h4>🥗 Mes préférences</h4>
+          <h3>🥗 Mes préférences</h3>
           <ul className="metric-list">
             <li><span>Restrictions</span><span>{DIET_LABELS[profile.dietary_restrictions] || '—'}</span></li>
             <li><span>Allergies</span><span>{profile.allergies || '—'}</span></li>
