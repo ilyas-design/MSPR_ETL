@@ -81,6 +81,8 @@ services:
       - sqlite_data:/data
     environment:
       - NUTRITION_API_DB_PATH=/data/mspr_etl.db
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-oss-120b:free}
     expose:
       - "8001"
     depends_on:

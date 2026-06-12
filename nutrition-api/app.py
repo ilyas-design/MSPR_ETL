@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import io
 import os
@@ -17,6 +18,10 @@ DB_PATH = os.getenv("NUTRITION_API_DB_PATH", "/data/mspr_etl.db")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-120b:free")
+# Marge large : le modèle (raisonnement) consomme des tokens avant le JSON,
+# une limite trop basse tronque la réponse (cause n°1 des échecs intermittents).
+OPENROUTER_MAX_TOKENS = int(os.getenv("OPENROUTER_MAX_TOKENS", "6000"))
+LLM_MAX_ATTEMPTS = int(os.getenv("LLM_MAX_ATTEMPTS", "3"))
 USDA_API_KEY = os.getenv("USDA_API_KEY")
 USDA_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
 
@@ -899,49 +904,50 @@ Réponds en JSON STRICT avec cette structure exacte (et rien d'autre) :
 Important : meal_type doit être l'un de "Petit-déjeuner", "Déjeuner", "Dîner", "Collation".
 Plats français réalistes, plaisants, équilibrés. Pas de répétitions entre repas."""
 
-    try:
-        async with httpx.AsyncClient(timeout=100.0) as client:
-            resp = await client.post(
-                OPENROUTER_URL,
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "http://localhost:5174",
-                    "X-Title": "HealthAI Coach MSPR2",
-                },
-                json={
-                    "model": OPENROUTER_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.7,
-                    "max_tokens": 3000,
-                },
-            )
-        resp.raise_for_status()
-        data = resp.json()
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"OpenRouter : {exc.response.status_code} {exc.response.text[:200]}",
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"OpenRouter inaccessible : {exc}")
+    # Boucle de retry : le tier `:free` rate-limite (429) et le modèle de
+    # raisonnement renvoie parfois une réponse vide/tronquée. On réessaie.
+    last_error: Exception | None = None
+    for attempt in range(LLM_MAX_ATTEMPTS):
+        try:
+            async with httpx.AsyncClient(timeout=100.0) as client:
+                resp = await client.post(
+                    OPENROUTER_URL,
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "http://localhost:5174",
+                        "X-Title": "HealthAI Coach MSPR2",
+                    },
+                    json={
+                        "model": OPENROUTER_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "temperature": 0.7,
+                        "max_tokens": OPENROUTER_MAX_TOKENS,
+                    },
+                )
+            resp.raise_for_status()
+            data = resp.json()
+            # OpenRouter peut renvoyer HTTP 200 avec un corps {"error": ...}
+            # (rate-limit ou erreur provider) — à retenter, pas à parser.
+            if data.get("error"):
+                raise ValueError(f"OpenRouter: {data['error']}")
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            if not content:
+                raise ValueError("Réponse LLM vide.")
+            parsed = _extract_json(content)
+            parsed["model"] = OPENROUTER_MODEL
+            return MealPlanAIResponse(**parsed)
+        except Exception as exc:  # on retente tout échec transitoire (429, timeout, JSON tronqué)
+            last_error = exc
+            if attempt < LLM_MAX_ATTEMPTS - 1:
+                await asyncio.sleep(1.5 * (attempt + 1))  # backoff progressif
 
-    content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-    if not content:
-        raise HTTPException(status_code=502, detail="Réponse LLM vide.")
-
-    try:
-        parsed = _extract_json(content)
-    except (ValueError, _json.JSONDecodeError) as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Impossible de parser le JSON du LLM : {exc}. Réponse : {content[:300]}",
-        )
-
-    parsed["model"] = OPENROUTER_MODEL
-    return MealPlanAIResponse(**parsed)
+    raise HTTPException(
+        status_code=502,
+        detail=f"Génération du plan repas échouée après {LLM_MAX_ATTEMPTS} tentatives : {last_error}",
+    )
 
 # Workout recommendation moved to reco-engine (POST /workout-plan-ai on port 8002).

@@ -5,6 +5,7 @@ import {
   getRecommendationsToday,
   saveMealPlan,
 } from '../services/api';
+import PlanLoading from '../components/PlanLoading';
 
 const GOAL_OPTIONS = [
   { value: 'weight_loss', label: 'Perdre du poids' },
@@ -262,7 +263,9 @@ function MealPlan() {
         <p className="form-error" role="alert">{error}</p>
       )}
 
-      {plan && (
+      {loading && <PlanLoading variant="meal" />}
+
+      {!loading && plan && (
         <section className="meal-plan-result" aria-live="polite">
           <div className="total-card">
             <h3>Plan généré</h3>

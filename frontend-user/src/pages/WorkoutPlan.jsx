@@ -6,6 +6,7 @@ import {
   getMyProfile,
 } from '../services/api';
 import { arrayToCommaList, commaListToArray } from '../utils/chartA11yHelpers';
+import PlanLoading from '../components/PlanLoading';
 
 const GOAL_OPTIONS = [
   { value: 'weight_loss', label: 'Perte de graisse / sèche' },
@@ -223,7 +224,9 @@ function WorkoutPlan() {
 
       {error && <p className="form-error" role="alert">{error}</p>}
 
-      {plan && (
+      {loading && <PlanLoading variant="workout" />}
+
+      {!loading && plan && (
         <section className="meal-plan-result" aria-live="polite">
           <div className="total-card">
             <h3>Programme de la semaine</h3>
