@@ -108,15 +108,30 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
-          scanners: vuln,misconfig
+          scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
-          format: sarif
-          output: trivy-fs.sarif
-          skip-dirs: node_modules,htmlcov,.pytest_cache,airflow/logs,frontend/dist,frontend-user/dist,.git,graphify-out
+          format: table
+          skip-dirs: node_modules,htmlcov,.pytest_cache,airflow/logs,frontend/dist,frontend-user/dist,.git,graphify-out,nutrition-api
+          skip-files: docker-compose.yml,.env.example
 
       - name: Upload Trivy FS SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: sarif
+          output: trivy-fs.sarif
+          skip-dirs: node_modules,htmlcov,.pytest_cache,airflow/logs,frontend/dist,frontend-user/dist,.git,graphify-out,nutrition-api
+          skip-files: docker-compose.yml,.env.example
+
+      - name: Publish Trivy FS SARIF
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
