@@ -1,0 +1,3 @@
+# Suppress reviewed CVEs here (one ID per line + comment).
+# Example:
+# CVE-2024-12345  # accepted risk, tracked in issue #42

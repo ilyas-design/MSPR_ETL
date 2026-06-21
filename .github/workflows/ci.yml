@@ -150,7 +150,7 @@ jobs:
   # 3. Build du frontend admin (Vite / React)
   # ---------------------------------------------------------------------------
   frontend-build:
-    name: Frontend build (Node 20)
+    name: Frontend build (Node 22)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -161,7 +161,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -186,7 +186,7 @@ jobs:
   # 4. Frontend utilisateur MSPR2 — lint, build, tests
   # ---------------------------------------------------------------------------
   frontend-user:
-    name: Frontend-user (Node 20)
+    name: Frontend-user (Node 22)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -197,7 +197,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend-user/package-lock.json
 

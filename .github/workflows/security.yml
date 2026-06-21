@@ -1,0 +1,259 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly full image scan (includes heavy nutrition-api build)
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Dependency audit — known CVEs in pip/npm lockfiles
+  # ---------------------------------------------------------------------------
+  dependency-audit:
+    name: Dependency audit (pip + npm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+
+      - name: pip-audit — ETL
+        run: pip-audit -r requirements.txt
+
+      - name: pip-audit — backend
+        run: pip-audit -r backend/requirements.txt
+
+      - name: pip-audit — nutrition-api
+        run: pip-audit -r nutrition-api/requirements.txt
+
+      - name: pip-audit — reco-engine
+        run: pip-audit -r reco-engine/requirements.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm audit — frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm audit --omit=dev --audit-level=high
+
+      - name: npm audit — frontend-user
+        working-directory: frontend-user
+        run: |
+          npm ci
+          npm audit --omit=dev --audit-level=high
+
+  # ---------------------------------------------------------------------------
+  # Python SAST — common security anti-patterns
+  # ---------------------------------------------------------------------------
+  python-sast:
+    name: Python SAST (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Bandit
+        run: pip install "bandit[toml]"
+
+      - name: Run Bandit
+        run: |
+          bandit -r Pipelines backend nutrition-api reco-engine airflow \
+            -x '*/tests/*,*test*.py,*/migrations/*,*/.pytest_cache/*' \
+            -lll \
+            -f json -o bandit-report.json || true
+          bandit -r Pipelines backend nutrition-api reco-engine airflow \
+            -x '*/tests/*,*test*.py,*/migrations/*,*/.pytest_cache/*' \
+            -lll
+
+      - name: Upload Bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Filesystem scan — dependencies + Dockerfile misconfigs (no Docker build)
+  # ---------------------------------------------------------------------------
+  trivy-fs:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy (filesystem)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: sarif
+          output: trivy-fs.sarif
+          skip-dirs: node_modules,htmlcov,.pytest_cache,airflow/logs,frontend/dist,frontend-user/dist,.git,graphify-out
+
+      - name: Upload Trivy FS SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-filesystem
+
+  # ---------------------------------------------------------------------------
+  # Image scan — lightweight service images on every PR/push
+  # ---------------------------------------------------------------------------
+  trivy-images-core:
+    name: Trivy image — ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: etl
+            context: .
+            dockerfile: Dockerfile.etl
+            tag: mspr-etl:ci
+          - name: backend
+            context: backend
+            dockerfile: backend/Dockerfile
+            tag: mspr-backend:ci
+          - name: reco-engine
+            context: reco-engine
+            dockerfile: reco-engine/Dockerfile
+            tag: mspr-reco-engine:ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t "${{ matrix.tag }}" -f "${{ matrix.dockerfile }}" "${{ matrix.context }}"
+
+      - name: Run Trivy (image)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.tag }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: sarif
+          output: trivy-image-${{ matrix.name }}.sarif
+
+      - name: Upload Trivy image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-image-${{ matrix.name }}.sarif
+          category: trivy-image-${{ matrix.name }}
+
+  # ---------------------------------------------------------------------------
+  # Image scan — heavy / infra images (weekly or manual)
+  # ---------------------------------------------------------------------------
+  trivy-images-scheduled:
+    name: Trivy image (full) — ${{ matrix.name }}
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: nutrition-api
+            context: nutrition-api
+            dockerfile: nutrition-api/Dockerfile
+            tag: mspr-nutrition-api:ci
+          - name: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
+            tag: mspr-frontend:ci
+          - name: frontend-user
+            context: frontend-user
+            dockerfile: frontend-user/Dockerfile
+            tag: mspr-frontend-user:ci
+          - name: airflow
+            context: airflow
+            dockerfile: airflow/Dockerfile
+            tag: mspr-airflow:ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t "${{ matrix.tag }}" -f "${{ matrix.dockerfile }}" "${{ matrix.context }}"
+
+      - name: Run Trivy (image)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.tag }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: sarif
+          output: trivy-image-${{ matrix.name }}.sarif
+
+      - name: Upload Trivy image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-image-${{ matrix.name }}.sarif
+          category: trivy-image-${{ matrix.name }}-scheduled
+
+  trivy-base-images:
+    name: Trivy base image — ${{ matrix.image }}
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [postgres:16, mongo:7]
+    steps:
+      - name: Pull image
+        run: docker pull "${{ matrix.image }}"
+
+      - name: Run Trivy (image)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: sarif
+          output: trivy-base-${{ strategy.job-index }}.sarif
+
+      - name: Upload Trivy base SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-base-${{ strategy.job-index }}.sarif
+          category: trivy-base-${{ matrix.image }}
