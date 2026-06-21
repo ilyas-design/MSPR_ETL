@@ -377,9 +377,22 @@ jobs:
         with:
           scan-type: image
           image-ref: ${{ matrix.tag }}
+          scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+          format: table
+
+      - name: Generate Trivy image SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.tag }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
           format: sarif
           output: trivy-image-${{ matrix.name }}.sarif
 
@@ -449,9 +462,22 @@ jobs:
         with:
           scan-type: image
           image-ref: ${{ matrix.tag }}
+          scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+          format: table
+
+      - name: Generate Trivy image SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.tag }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
           format: sarif
           output: trivy-image-${{ matrix.name }}.sarif
 
@@ -480,9 +506,22 @@ jobs:
         with:
           scan-type: image
           image-ref: ${{ matrix.image }}
+          scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+          format: table
+
+      - name: Generate Trivy base SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
           format: sarif
           output: trivy-base-${{ strategy.job-index }}.sarif
 

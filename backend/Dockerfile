@@ -10,7 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN SECRET_KEY=build-dummy python manage.py collectstatic --noinput
+ARG DJANGO_BUILD_SECRET_KEY=build-dummy-for-collectstatic-only
+RUN DJANGO_BUILD_SECRET_KEY=$DJANGO_BUILD_SECRET_KEY SECRET_KEY=$DJANGO_BUILD_SECRET_KEY \
+    python manage.py collectstatic --noinput
 
 EXPOSE 8000
 
