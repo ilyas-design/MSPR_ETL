@@ -160,7 +160,7 @@ function NavDropdown({ label, icon, items, matchPaths = [], extraMatch }) {
     matchPaths.some((path) => location.pathname.startsWith(path)) ||
     (extraMatch ? extraMatch(location) : false);
 
-  // Ferme le dropdown au click extérieur
+  // Ferme au click extérieur ou Échap (RGAA 7.3 / WCAG 2.1.2 — focus rendu au déclencheur)
   useEffect(() => {
     if (!open) return;
     const handleClickOutside = (e) => {
@@ -168,8 +168,18 @@ function NavDropdown({ label, icon, items, matchPaths = [], extraMatch }) {
         setOpen(false);
       }
     };
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, [open]);
 
   // Ferme aussi au changement de route
@@ -177,19 +187,10 @@ function NavDropdown({ label, icon, items, matchPaths = [], extraMatch }) {
     setOpen(false);
   }, [location.pathname, location.search]);
 
-  // Échap ferme le menu et rend le focus au bouton déclencheur (RGAA 7.3 / WCAG 2.1.2)
-  const handleKeyDown = (e) => {
-    if (e.key === 'Escape' && open) {
-      setOpen(false);
-      triggerRef.current?.focus();
-    }
-  };
-
   return (
     <div
       ref={dropdownRef}
       className={`nav-dropdown ${open ? 'open' : ''} ${isActive ? 'active' : ''}`}
-      onKeyDown={handleKeyDown}
     >
       <button
         ref={triggerRef}
