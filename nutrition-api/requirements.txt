@@ -1,8 +1,8 @@
 fastapi==0.135.4
 uvicorn[standard]==0.34.0
-python-multipart==0.0.12
-transformers==4.44.2
-torch==2.4.1
-Pillow==10.4.0
+python-multipart==0.0.31
+transformers==4.53.0
+torch==2.9.1
+Pillow==12.2.0
 httpx==0.27.2
 pytest==9.0.3

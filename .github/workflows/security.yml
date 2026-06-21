@@ -42,9 +42,6 @@ jobs:
       - name: pip-audit — backend
         run: pip-audit -r backend/requirements.txt
 
-      - name: pip-audit — nutrition-api
-        run: pip-audit -r nutrition-api/requirements.txt
-
       - name: pip-audit — reco-engine
         run: pip-audit -r reco-engine/requirements.txt
 
@@ -66,6 +63,25 @@ jobs:
         run: |
           npm ci
           npm audit --omit=dev --audit-level=high
+
+  # ML stack (torch/transformers) — slow install; run weekly or manually
+  dependency-audit-ml:
+    name: Dependency audit (nutrition-api / ML)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+
+      - name: pip-audit — nutrition-api
+        run: pip-audit -r nutrition-api/requirements.txt
 
   # ---------------------------------------------------------------------------
   # Python SAST — common security anti-patterns
@@ -112,7 +128,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Trivy (filesystem)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -160,7 +176,7 @@ jobs:
         run: docker build -t "${{ matrix.tag }}" -f "${{ matrix.dockerfile }}" "${{ matrix.context }}"
 
       - name: Run Trivy (image)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: ${{ matrix.tag }}
@@ -211,7 +227,7 @@ jobs:
         run: docker build -t "${{ matrix.tag }}" -f "${{ matrix.dockerfile }}" "${{ matrix.context }}"
 
       - name: Run Trivy (image)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: ${{ matrix.tag }}
@@ -241,7 +257,7 @@ jobs:
         run: docker pull "${{ matrix.image }}"
 
       - name: Run Trivy (image)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: ${{ matrix.image }}
