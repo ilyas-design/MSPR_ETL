@@ -181,6 +181,10 @@ class UserProfile(models.Model):
         help_text='Budget repas hebdomadaire optionnel (€)',
     )
     daily_calorie_target = models.PositiveIntegerField(null=True, blank=True)
+    weekly_workout_goal = models.PositiveSmallIntegerField(
+        default=3,
+        help_text='Nombre de séances visées par semaine (anneau d\'objectif).',
+    )
     age = models.PositiveIntegerField(null=True, blank=True)
     gender = models.CharField(max_length=1, choices=Gender.choices, blank=True)
     height_cm = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -338,3 +342,55 @@ class PendingChange(models.Model):
 
     def __str__(self):
         return f"PendingChange#{self.pk} {self.table_name}/{self.record_id} ({self.status})"
+
+
+class WeightLog(models.Model):
+    """Historique des pesées d'un utilisateur, pour tracer la progression
+    vers l'objectif de poids (courbe du dashboard)."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='weight_logs',
+    )
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=2)
+    logged_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'weight_log'
+        ordering = ['-logged_at']
+        indexes = [models.Index(fields=['user', 'logged_at'])]
+
+    def __str__(self):
+        return f"WeightLog({self.user.username}, {self.weight_kg}kg, {self.logged_at:%Y-%m-%d})"
+
+
+class PlanFeedback(models.Model):
+    """Retour 👍/👎 d'un utilisateur sur un plan généré (repas ou sport).
+
+    Découplé du stockage Mongo des plans : on garde juste la référence
+    (type + id Mongo) pour pouvoir mesurer la satisfaction et, à terme,
+    améliorer les recommandations IA."""
+
+    class PlanType(models.TextChoices):
+        MEAL = 'meal', 'Plan repas'
+        WORKOUT = 'workout', 'Plan sport'
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='plan_feedbacks',
+    )
+    plan_type = models.CharField(max_length=10, choices=PlanType.choices)
+    plan_id = models.CharField(max_length=64, blank=True)
+    liked = models.BooleanField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'plan_feedback'
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', 'plan_type'])]
+
+    def __str__(self):
+        verdict = '👍' if self.liked else '👎'
+        return f"PlanFeedback({self.user.username}, {self.plan_type}, {verdict})"

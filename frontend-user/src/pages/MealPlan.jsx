@@ -6,6 +6,7 @@ import {
   saveMealPlan,
 } from '../services/api';
 import PlanLoading from '../components/PlanLoading';
+import PlanFeedback from '../components/PlanFeedback';
 
 const GOAL_OPTIONS = [
   { value: 'weight_loss', label: 'Perdre du poids' },
@@ -293,6 +294,7 @@ function MealPlan() {
             {saveSuccess && (
               <p className="form-success" role="status">{saveSuccess}</p>
             )}
+            <PlanFeedback planType="meal" planId={planSavedId || ''} />
           </div>
 
           {plan.advice && (

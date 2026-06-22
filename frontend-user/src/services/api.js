@@ -224,7 +224,7 @@ export async function generateMealPlanAI(params) {
   // Version LLM (gpt-oss) — recettes complètes avec ingrédients
   // params = { goal, calorie_target, allergies, restrictions, meals_per_day, already_eaten_kcal }
   const response = await api.post('/ai/meal-plan-ai/', params, {
-    timeout: 120000, // LLM peut prendre 30-90s sur la free tier OpenRouter
+    timeout: 170000, // LLM + retries ; aligné sous gunicorn --timeout 180
   });
   return response.data;
 }
@@ -268,7 +268,31 @@ export async function generateWorkoutPlanAI(params) {
   // params = { goal, level, days_per_week, session_duration_min, equipment, location, preferences, limitations }
   // (recent_sessions est ajouté côté Django automatiquement)
   const response = await api.post('/ai/workout-plan-ai/', params, {
-    timeout: 120000,
+    timeout: 170000, // LLM + retries ; aligné sous gunicorn --timeout 180
+  });
+  return response.data;
+}
+
+// ============================================================
+// Engagement — streak, objectif hebdo, benchmark, progression poids
+// ============================================================
+
+export async function getEngagementStats() {
+  const response = await api.get('/me/engagement-stats/');
+  return response.data;
+}
+
+export async function addWeightLog(weightKg) {
+  const response = await api.post('/me/weight-logs/', { weight_kg: weightKg });
+  return response.data;
+}
+
+export async function sendPlanFeedback(planType, liked, planId = '') {
+  // planType = 'meal' | 'workout'
+  const response = await api.post('/me/plan-feedback/', {
+    plan_type: planType,
+    liked,
+    plan_id: planId,
   });
   return response.data;
 }

@@ -2157,6 +2157,135 @@ details > summary:hover { color: var(--color-primary); }
 }
 
 /* ---------------------------------------------------------------------------
+   Engagement — streak, objectif hebdo, benchmark, progression poids
+   --------------------------------------------------------------------------- */
+.engagement-section { margin-top: var(--sp-6); animation: fade-up 0.4s ease both; }
+
+.engagement-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--sp-4);
+}
+
+.engagement-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 3px rgba(12, 10, 9, 0.04);
+}
+
+.engagement-icon { font-size: 1.6rem; line-height: 1; }
+
+.engagement-big {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-text);
+}
+.engagement-big-unit {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-left: var(--sp-2);
+}
+.engagement-label { margin: 0; font-size: 0.9rem; color: var(--color-text-muted); }
+.engagement-label-strong { margin: 0; font-weight: 600; color: var(--color-text); }
+.engagement-sub { margin: 0; font-size: 0.82rem; color: var(--color-text-light); }
+
+.streak-card { background: linear-gradient(160deg, #fff7ed 0%, var(--color-surface) 60%); }
+
+/* Anneau objectif hebdo */
+.weekly-card { flex-direction: row; align-items: center; gap: var(--sp-4); }
+.ring { width: 80px; height: 80px; flex-shrink: 0; }
+.ring-bg { fill: none; stroke: var(--color-bg-2); stroke-width: 8; }
+.ring-fill {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ring-text {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  fill: var(--color-text);
+}
+
+/* Barre horizontale (benchmark, poids) */
+.engagement-bar {
+  position: relative;
+  height: 8px;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--color-bg-2);
+  overflow: hidden;
+  margin: var(--sp-1) 0;
+}
+.engagement-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-primary);
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.engagement-bar > span.bar-emerald { background: var(--color-accent); }
+
+.weight-numbers { margin: 0; font-size: 1.1rem; color: var(--color-text); }
+.weight-numbers strong { font-family: var(--font-display); font-size: 1.4rem; }
+.weight-arrow { color: var(--color-text-muted); }
+
+.weight-form { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); }
+.weight-form input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+.weight-form button {
+  padding: var(--sp-2) var(--sp-4);
+  white-space: nowrap;
+}
+
+/* Feedback 👍/👎 sur les plans */
+.plan-feedback {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--color-border);
+}
+.plan-feedback-q { font-size: 0.9rem; color: var(--color-text-muted); }
+.plan-feedback-btn {
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--color-bg-2);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.plan-feedback-btn:hover { background: var(--color-primary-light); transform: translateY(-1px); }
+.plan-feedback-thanks {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--color-border);
+  font-size: 0.9rem;
+  color: var(--color-accent);
+}
+
+/* ---------------------------------------------------------------------------
    Préférence "réduire les animations" (RGAA 13.8 / WCAG 2.3.3).
    Neutralise transitions, animations et défilements animés pour les
    utilisateurs ayant activé prefers-reduced-motion.

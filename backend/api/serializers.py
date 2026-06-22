@@ -131,6 +131,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'injuries',
             'meal_budget',
             'daily_calorie_target',
+            'weekly_workout_goal',
             'age',
             'gender',
             'height_cm',

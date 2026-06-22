@@ -30,8 +30,10 @@ from .models import (
     Nutrition,
     Patient,
     PendingChange,
+    PlanFeedback,
     Sante,
     UserProfile,
+    WeightLog,
     WorkoutSession,
 )
 from .permissions import IsSupervisor, is_supervisor
@@ -763,7 +765,7 @@ class AIMealPlanLLMView(APIView):
             resp = httpx.post(
                 f'{NUTRITION_API_URL}/meal-plan-ai',
                 json=request.data,
-                timeout=110.0,  # le LLM peut prendre 30-90s sur la free tier
+                timeout=150.0,  # couvre les retries LLM ; < gunicorn --timeout 180
             )
             resp.raise_for_status()
         except httpx.HTTPError as exc:
@@ -1075,6 +1077,217 @@ class RecommendationsTodayView(APIView):
         })
 
 
+# ---------------------------------------------------------------------------
+# Engagement — streak, objectif hebdo, benchmark dataset, progression poids
+# ---------------------------------------------------------------------------
+
+def _local_active_dates(user):
+    """Ensemble des jours (date locale) où l'utilisateur a loggé un repas
+    OU réalisé une séance — base du calcul de streak."""
+    dates = set()
+    for dt in MealEntry.objects.filter(user=user).values_list('analyzed_at', flat=True):
+        if dt:
+            dates.add(timezone.localtime(dt).date())
+    workout_dts = list(
+        WorkoutSession.objects.filter(user=user).values_list('done_at', flat=True)
+    )
+    for dt in workout_dts:
+        if dt:
+            dates.add(timezone.localtime(dt).date())
+    return dates, workout_dts
+
+
+def _current_streak(dates, today):
+    from datetime import timedelta
+    if not dates:
+        return 0
+    day = today
+    if today not in dates:
+        day = today - timedelta(days=1)
+        if day not in dates:
+            return 0
+    streak = 0
+    while day in dates:
+        streak += 1
+        day -= timedelta(days=1)
+    return streak
+
+
+def _longest_streak(dates):
+    from datetime import timedelta
+    if not dates:
+        return 0
+    ordered = sorted(dates)
+    best = run = 1
+    for i in range(1, len(ordered)):
+        run = run + 1 if (ordered[i] - ordered[i - 1]).days == 1 else 1
+        best = max(best, run)
+    return best
+
+
+def _activity_percentile(profile, user_weekly_hours):
+    """Percentile de l'activité hebdo de l'utilisateur vs le dataset patients
+    (même tranche d'âge si l'âge est connu)."""
+    qs = ActivitePhysique.objects.all()
+    if profile.age:
+        peer_ids = Patient.objects.filter(
+            age__gte=profile.age - 5, age__lte=profile.age + 5
+        ).values_list('patient_id', flat=True)
+        scoped = qs.filter(patient_id__in=list(peer_ids))
+        if scoped.exists():
+            qs = scoped
+    peer_hours = [
+        float(h)
+        for h in qs.values_list('weekly_exercice_hours', flat=True)
+        if h is not None
+    ]
+    if not peer_hours:
+        return None
+    below = sum(1 for h in peer_hours if h < user_weekly_hours)
+    return round(100 * below / len(peer_hours)), len(peer_hours)
+
+
+class EngagementStatsView(APIView):
+    """
+    GET /api/me/engagement-stats/
+    Streak, objectif hebdomadaire de séances, benchmark dataset, progression poids.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from datetime import timedelta
+        profile = UserProfile.objects.filter(user=request.user).first()
+        today = timezone.localtime().date()
+
+        dates, workout_dts = _local_active_dates(request.user)
+        week_start = today - timedelta(days=today.weekday())  # lundi
+        sessions_this_week = sum(
+            1 for dt in workout_dts if dt and timezone.localtime(dt).date() >= week_start
+        )
+        weekly_goal = profile.weekly_workout_goal if profile else 3
+
+        # Activité hebdo de l'utilisateur (heures) pour le benchmark
+        user_weekly_hours = round(
+            sum(
+                (s.duration_min or 0)
+                for s in WorkoutSession.objects.filter(
+                    user=request.user, done_at__date__gte=week_start
+                )
+            ) / 60.0,
+            1,
+        )
+        benchmark = None
+        if profile:
+            pct = _activity_percentile(profile, user_weekly_hours)
+            if pct is not None:
+                benchmark = {
+                    'activity_percentile': pct[0],
+                    'sample_size': pct[1],
+                    'user_weekly_hours': user_weekly_hours,
+                    'age_scoped': bool(profile.age),
+                }
+
+        # Progression poids
+        weight = None
+        if profile and profile.target_weight_kg:
+            logs = list(
+                WeightLog.objects.filter(user=request.user).order_by('logged_at')
+            )
+            start = float(logs[0].weight_kg) if logs else (
+                float(profile.weight_kg) if profile.weight_kg else None
+            )
+            current = float(logs[-1].weight_kg) if logs else (
+                float(profile.weight_kg) if profile.weight_kg else None
+            )
+            target = float(profile.target_weight_kg)
+            percent = None
+            if start is not None and current is not None and start != target:
+                percent = max(0, min(100, round(100 * (start - current) / (start - target))))
+            weight = {
+                'start': start,
+                'current': current,
+                'target': target,
+                'percent': percent,
+                'history': [
+                    {'date': timezone.localtime(l.logged_at).date().isoformat(),
+                     'weight': float(l.weight_kg)}
+                    for l in logs
+                ],
+            }
+
+        return Response({
+            'streak': {
+                'current': _current_streak(dates, today),
+                'longest': _longest_streak(dates),
+                'active_today': today in dates,
+            },
+            'weekly': {
+                'sessions_done': sessions_this_week,
+                'goal': weekly_goal,
+                'percent': min(100, round(100 * sessions_this_week / weekly_goal)) if weekly_goal else 0,
+            },
+            'benchmark': benchmark,
+            'weight': weight,
+        })
+
+
+class WeightLogView(APIView):
+    """
+    GET  /api/me/weight-logs/  → historique des pesées
+    POST /api/me/weight-logs/  → enregistre une pesée (met aussi à jour le profil)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        logs = WeightLog.objects.filter(user=request.user).order_by('logged_at')
+        return Response([
+            {'id': l.id,
+             'weight_kg': float(l.weight_kg),
+             'logged_at': l.logged_at.isoformat()}
+            for l in logs
+        ])
+
+    def post(self, request):
+        try:
+            weight = float(request.data.get('weight_kg'))
+        except (TypeError, ValueError):
+            return Response({'detail': 'weight_kg invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not (20 <= weight <= 400):
+            return Response({'detail': 'Poids hors plage réaliste (20-400 kg).'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        log = WeightLog.objects.create(user=request.user, weight_kg=weight)
+        # Tenir le profil à jour avec la dernière pesée
+        UserProfile.objects.filter(user=request.user).update(weight_kg=weight)
+        return Response(
+            {'id': log.id, 'weight_kg': float(log.weight_kg), 'logged_at': log.logged_at.isoformat()},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PlanFeedbackView(APIView):
+    """
+    POST /api/me/plan-feedback/  → 👍/👎 sur un plan généré (repas ou sport).
+    Body: {plan_type: 'meal'|'workout', plan_id?: str, liked: bool}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        plan_type = request.data.get('plan_type')
+        liked = request.data.get('liked')
+        if plan_type not in dict(PlanFeedback.PlanType.choices):
+            return Response({'detail': "plan_type doit être 'meal' ou 'workout'."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(liked, bool):
+            return Response({'detail': 'liked doit être un booléen.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        fb = PlanFeedback.objects.create(
+            user=request.user,
+            plan_type=plan_type,
+            plan_id=str(request.data.get('plan_id', ''))[:64],
+            liked=liked,
+        )
+        return Response({'id': fb.id, 'liked': fb.liked}, status=status.HTTP_201_CREATED)
+
 
 # ---------------------------------------------------------------------------
 # MongoDB — Plans de repas IA sauvegardés (collection meal_plans)
@@ -1272,7 +1485,7 @@ class AIWorkoutPlanView(APIView):
             resp = httpx.post(
                 f'{RECO_ENGINE_URL}/workout-plan-ai',
                 json=payload,
-                timeout=110.0,
+                timeout=150.0,  # couvre les retries LLM ; < gunicorn --timeout 180
             )
             resp.raise_for_status()
         except httpx.HTTPError as exc:

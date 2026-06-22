@@ -17,7 +17,10 @@ OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 # Le modèle (raisonnement) consomme des tokens avant de produire le JSON :
 # une marge large évite les réponses tronquées (cause n°1 des échecs).
 OPENROUTER_MAX_TOKENS = int(os.environ.get('OPENROUTER_MAX_TOKENS', '6000'))
-LLM_MAX_ATTEMPTS = int(os.environ.get('LLM_MAX_ATTEMPTS', '3'))
+# 2 essais × 60s : worst case ~122s, sous le timeout httpx du backend (150s)
+# lui-même sous gunicorn --timeout 180.
+LLM_MAX_ATTEMPTS = int(os.environ.get('LLM_MAX_ATTEMPTS', '2'))
+LLM_TIMEOUT_S = float(os.environ.get('LLM_TIMEOUT_S', '60'))
 
 WORKOUT_GOAL_LABELS_FR = {
     'weight_loss': 'perte de graisse — cardio modéré et polyarticulaires',
@@ -101,7 +104,7 @@ JSON strict :
     last_error: Exception | None = None
     for attempt in range(LLM_MAX_ATTEMPTS):
         try:
-            async with httpx.AsyncClient(timeout=100.0) as client:
+            async with httpx.AsyncClient(timeout=LLM_TIMEOUT_S) as client:
                 resp = await client.post(
                     OPENROUTER_URL,
                     headers={

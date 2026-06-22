@@ -19,6 +19,7 @@ import {
 import { AccessibleChart, ChartDataTable } from '../utils/chartA11y';
 import { arrayToCommaList, buildChartSummary } from '../utils/chartA11yHelpers';
 import { activityChartOptions, CHART_PALETTE } from '../components/ChartOptions';
+import EngagementCards from '../components/EngagementCards';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -255,6 +256,9 @@ function Dashboard() {
           </footer>
         </article>
       </section>
+
+      {/* ENGAGEMENT — streak, objectif hebdo, benchmark, poids */}
+      <EngagementCards />
 
       {weeklyActivity.length > 0 && (
         <section className="dashboard-chart-section" aria-labelledby="activity-chart-heading">

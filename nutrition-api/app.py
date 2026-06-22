@@ -21,7 +21,10 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-120b:free")
 # Marge large : le modèle (raisonnement) consomme des tokens avant le JSON,
 # une limite trop basse tronque la réponse (cause n°1 des échecs intermittents).
 OPENROUTER_MAX_TOKENS = int(os.getenv("OPENROUTER_MAX_TOKENS", "6000"))
-LLM_MAX_ATTEMPTS = int(os.getenv("LLM_MAX_ATTEMPTS", "3"))
+# 2 essais × 60s : worst case ~122s, sous le timeout httpx du backend (150s)
+# lui-même sous gunicorn --timeout 180.
+LLM_MAX_ATTEMPTS = int(os.getenv("LLM_MAX_ATTEMPTS", "2"))
+LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "60"))
 USDA_API_KEY = os.getenv("USDA_API_KEY")
 USDA_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
 
@@ -909,7 +912,7 @@ Plats français réalistes, plaisants, équilibrés. Pas de répétitions entre 
     last_error: Exception | None = None
     for attempt in range(LLM_MAX_ATTEMPTS):
         try:
-            async with httpx.AsyncClient(timeout=100.0) as client:
+            async with httpx.AsyncClient(timeout=LLM_TIMEOUT_S) as client:
                 resp = await client.post(
                     OPENROUTER_URL,
                     headers={

@@ -7,6 +7,7 @@ import {
 } from '../services/api';
 import { arrayToCommaList, commaListToArray } from '../utils/chartA11yHelpers';
 import PlanLoading from '../components/PlanLoading';
+import PlanFeedback from '../components/PlanFeedback';
 
 const GOAL_OPTIONS = [
   { value: 'weight_loss', label: 'Perte de graisse / sèche' },
@@ -248,6 +249,7 @@ function WorkoutPlan() {
               </button>
             </div>
             {saveSuccess && <p className="form-success" role="status">{saveSuccess}</p>}
+            <PlanFeedback planType="workout" planId={planSavedId || ''} />
           </div>
 
           {plan.progression_tips && (
