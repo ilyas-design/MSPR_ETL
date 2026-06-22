@@ -5,18 +5,146 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Weekly: ML dependency audit + full Docker image scans
+    - cron: "0 6 * * 1"
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
-  # ---------------------------------------------------------------------------
-  # 1. Tests unitaires + couverture (ETL, Django, nutrition-api, reco-engine)
-  # ---------------------------------------------------------------------------
+  # ===========================================================================
+  # Stage 1 — Security gates (fast, fail early)
+  # ===========================================================================
+
+  dependency-audit:
+    name: "1 · Dependency audit (pip + npm)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+
+      - name: pip-audit — ETL
+        run: pip-audit -r requirements.txt
+
+      - name: pip-audit — backend
+        run: pip-audit -r backend/requirements.txt
+
+      - name: pip-audit — reco-engine
+        run: pip-audit -r reco-engine/requirements.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm audit — frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm audit --omit=dev --audit-level=high
+
+      - name: npm audit — frontend-user
+        working-directory: frontend-user
+        run: |
+          npm ci
+          npm audit --omit=dev --audit-level=high
+
+  python-sast:
+    name: "1 · Python SAST (Bandit)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Bandit
+        run: pip install "bandit[toml]"
+
+      - name: Run Bandit
+        run: |
+          bandit -r Pipelines backend nutrition-api reco-engine airflow \
+            -x '*/tests/*,*test*.py,*/migrations/*,*/.pytest_cache/*' \
+            -lll \
+            -f json -o bandit-report.json || true
+          bandit -r Pipelines backend nutrition-api reco-engine airflow \
+            -x '*/tests/*,*test*.py,*/migrations/*,*/.pytest_cache/*' \
+            -lll
+
+      - name: Upload Bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+          retention-days: 14
+
+  trivy-fs:
+    name: "1 · Trivy filesystem scan"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy (filesystem)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          skip-dirs: node_modules,htmlcov,.pytest_cache,airflow/logs,frontend/dist,frontend-user/dist,.git,graphify-out,nutrition-api
+          skip-files: docker-compose.yml,.env.example
+
+      - name: Upload Trivy FS SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: sarif
+          output: trivy-fs.sarif
+          skip-dirs: node_modules,htmlcov,.pytest_cache,airflow/logs,frontend/dist,frontend-user/dist,.git,graphify-out,nutrition-api
+          skip-files: docker-compose.yml,.env.example
+
+      - name: Publish Trivy FS SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-filesystem
+
+  # ===========================================================================
+  # Stage 2 — Tests & builds (after security gates pass)
+  # ===========================================================================
+
   tests-coverage:
-    name: Tests & coverage (Python 3.12)
+    name: "2 · Tests & coverage (Python 3.12)"
+    needs: [dependency-audit, python-sast, trivy-fs]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -93,11 +221,9 @@ jobs:
           path: htmlcov/
           retention-days: 14
 
-  # ---------------------------------------------------------------------------
-  # 2. Smoke test end-to-end : exécution réelle du pipeline + monitoring
-  # ---------------------------------------------------------------------------
   etl-smoke:
-    name: ETL pipeline + monitoring (smoke)
+    name: "2 · ETL pipeline + monitoring (smoke)"
+    needs: [dependency-audit, python-sast, trivy-fs]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -146,11 +272,9 @@ jobs:
             mspr_etl.db
           retention-days: 14
 
-  # ---------------------------------------------------------------------------
-  # 3. Build du frontend admin (Vite / React)
-  # ---------------------------------------------------------------------------
   frontend-build:
-    name: Frontend build (Node 20)
+    name: "2 · Frontend build (Node 22)"
+    needs: [dependency-audit, python-sast, trivy-fs]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -161,7 +285,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -182,11 +306,9 @@ jobs:
           path: frontend/dist/
           retention-days: 14
 
-  # ---------------------------------------------------------------------------
-  # 4. Frontend utilisateur MSPR2 — lint, build, tests
-  # ---------------------------------------------------------------------------
   frontend-user:
-    name: Frontend-user (Node 20)
+    name: "2 · Frontend-user (Node 22)"
+    needs: [dependency-audit, python-sast, trivy-fs]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -197,7 +319,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend-user/package-lock.json
 
@@ -220,11 +342,75 @@ jobs:
           path: frontend-user/dist/
           retention-days: 14
 
-  # ---------------------------------------------------------------------------
-  # 5. Microservices MSPR2 — pytest (nutrition-api, reco-engine)
-  # ---------------------------------------------------------------------------
-  mspr2-services:
-    name: MSPR2 services pytest
+  # ===========================================================================
+  # Stage 3 — Docker image scan (after tests & builds pass)
+  # ===========================================================================
+
+  trivy-images-core:
+    name: "3 · Trivy image — ${{ matrix.name }}"
+    needs: [tests-coverage, etl-smoke, frontend-build, frontend-user]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: etl
+            context: .
+            dockerfile: Dockerfile.etl
+            tag: mspr-etl:ci
+          - name: backend
+            context: backend
+            dockerfile: backend/Dockerfile
+            tag: mspr-backend:ci
+          - name: reco-engine
+            context: reco-engine
+            dockerfile: reco-engine/Dockerfile
+            tag: mspr-reco-engine:ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t "${{ matrix.tag }}" -f "${{ matrix.dockerfile }}" "${{ matrix.context }}"
+
+      - name: Run Trivy (image)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.tag }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      - name: Generate Trivy image SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.tag }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: sarif
+          output: trivy-image-${{ matrix.name }}.sarif
+
+      - name: Upload Trivy image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-image-${{ matrix.name }}.sarif
+          category: trivy-image-${{ matrix.name }}
+
+  # ===========================================================================
+  # Stage 4 — Extended scans (weekly cron or manual trigger only)
+  # ===========================================================================
+
+  dependency-audit-ml:
+    name: "4 · Dependency audit (nutrition-api / ML)"
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: [trivy-images-core]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -233,21 +419,115 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            nutrition-api/requirements.txt
-            reco-engine/requirements.txt
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r nutrition-api/requirements.txt
-          pip install -r reco-engine/requirements.txt
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
 
-      - name: nutrition-api pytest
-        working-directory: nutrition-api
-        run: pytest -v
+      - name: pip-audit — nutrition-api
+        run: pip-audit -r nutrition-api/requirements.txt
 
-      - name: reco-engine pytest
-        working-directory: reco-engine
-        run: pytest -v
+  trivy-images-full:
+    name: "4 · Trivy image (full) — ${{ matrix.name }}"
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: [trivy-images-core]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: nutrition-api
+            context: nutrition-api
+            dockerfile: nutrition-api/Dockerfile
+            tag: mspr-nutrition-api:ci
+          - name: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
+            tag: mspr-frontend:ci
+          - name: frontend-user
+            context: frontend-user
+            dockerfile: frontend-user/Dockerfile
+            tag: mspr-frontend-user:ci
+          - name: airflow
+            context: airflow
+            dockerfile: airflow/Dockerfile
+            tag: mspr-airflow:ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t "${{ matrix.tag }}" -f "${{ matrix.dockerfile }}" "${{ matrix.context }}"
+
+      - name: Run Trivy (image)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.tag }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      - name: Generate Trivy image SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.tag }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: sarif
+          output: trivy-image-${{ matrix.name }}.sarif
+
+      - name: Upload Trivy image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-image-${{ matrix.name }}.sarif
+          category: trivy-image-${{ matrix.name }}-full
+
+  trivy-base-images:
+    name: "4 · Trivy base image — ${{ matrix.image }}"
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: [trivy-images-full]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [postgres:16, mongo:7]
+    steps:
+      - name: Pull image
+        run: docker pull "${{ matrix.image }}"
+
+      - name: Run Trivy (image)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      - name: Generate Trivy base SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: sarif
+          output: trivy-base-${{ strategy.job-index }}.sarif
+
+      - name: Upload Trivy base SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-base-${{ strategy.job-index }}.sarif
+          category: trivy-base-${{ matrix.image }}

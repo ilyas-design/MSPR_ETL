@@ -17,6 +17,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET:-mspr_airflow_dev_jwt_secret}
     AIRFLOW__API_AUTH__JWT_ISSUER: ${AIRFLOW__API_AUTH__JWT_ISSUER:-airflow}
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    PYTHONDONTWRITEBYTECODE: "1"
+    PYTHONUNBUFFERED: "1"
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
@@ -80,9 +82,12 @@ services:
     volumes:
       - sqlite_data:/data
     environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
       - NUTRITION_API_DB_PATH=/data/mspr_etl.db
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-oss-120b:free}
+      - USDA_API_KEY=${USDA_API_KEY:-}
     expose:
       - "8001"
     depends_on:
@@ -102,6 +107,8 @@ services:
     volumes:
       - sqlite_data:/data
     environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
       - RECO_ENGINE_DB_PATH=/data/mspr_etl.db
       - MONGO_HOST=mongo
       - MONGO_USER=${MONGO_ROOT_USER:-healthai}
@@ -130,6 +137,8 @@ services:
     volumes:
       - sqlite_data:/data
     environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
       - SECRET_KEY=${SECRET_KEY:-django-insecure-changeme-in-production}
       - DEBUG=${DEBUG:-False}
       - DB_PATH=/data/mspr_etl.db
@@ -145,6 +154,7 @@ services:
       - MONGO_DB_NAME=${MONGO_DB_NAME:-healthai_plans}
     expose:
       - "8000"
+    restart: unless-stopped
     healthcheck:
       test:
         [
@@ -235,7 +245,7 @@ services:
     <<: *airflow-common
     command: api-server
     ports:
-      - "8081:8080"
+      - "8080:8080"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
       interval: 30s

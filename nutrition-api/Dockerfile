@@ -1,5 +1,10 @@
 FROM python:3.12-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/app/.cache/huggingface \
+    TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
@@ -9,7 +14,7 @@ RUN pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     -r requirements.txt
 
-# Bake the HuggingFace model into the image layer to avoid cold-start downloads
+# Bake the HuggingFace Food-101 model into the image layer to avoid cold-start downloads
 RUN python -c "from transformers import pipeline; pipeline('image-classification', model='nateraw/food')"
 
 COPY app.py .
