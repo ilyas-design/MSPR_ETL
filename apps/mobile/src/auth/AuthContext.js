@@ -7,6 +7,7 @@ import {
   setOnAuthExpired,
 } from '../api/client';
 import { login as apiLogin, register as apiRegister, getSocialProfile } from '../api/social';
+import { getMyProfile } from '../api/health';
 
 const AuthContext = createContext(null);
 
@@ -14,13 +15,25 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [healthProfile, setHealthProfile] = useState(null);
 
   const refreshProfile = useCallback(async () => {
     try {
       const data = await getSocialProfile();
       setProfile(data);
     } catch {
-      // profil non critique au boot
+      // profil social non critique au boot
+    }
+  }, []);
+
+  const refreshHealthProfile = useCallback(async () => {
+    try {
+      const data = await getMyProfile();
+      setHealthProfile(data);
+      return data;
+    } catch {
+      setHealthProfile(null);
+      return null;
     }
   }, []);
 
@@ -28,35 +41,40 @@ export function AuthProvider({ children }) {
     await clearTokens();
     setSignedIn(false);
     setProfile(null);
+    setHealthProfile(null);
   }, []);
 
-  // Bootstrap : hydrate les tokens et l'état de session au démarrage.
   useEffect(() => {
     let mounted = true;
     setOnAuthExpired(() => {
       setSignedIn(false);
       setProfile(null);
+      setHealthProfile(null);
     });
     (async () => {
       await loadTokens();
       if (!mounted) return;
       const authed = hasToken();
       setSignedIn(authed);
-      if (authed) await refreshProfile();
+      if (authed) {
+        await refreshProfile();
+        await refreshHealthProfile();
+      }
       setReady(true);
     })();
     return () => {
       mounted = false;
     };
-  }, [refreshProfile]);
+  }, [refreshProfile, refreshHealthProfile]);
 
   const signIn = useCallback(
     async (username, password) => {
       await apiLogin(username, password);
       setSignedIn(true);
       await refreshProfile();
+      await refreshHealthProfile();
     },
-    [refreshProfile],
+    [refreshProfile, refreshHealthProfile],
   );
 
   const signUp = useCallback(
@@ -64,16 +82,20 @@ export function AuthProvider({ children }) {
       await apiRegister(username, password, email);
       setSignedIn(true);
       await refreshProfile();
+      await refreshHealthProfile();
     },
-    [refreshProfile],
+    [refreshProfile, refreshHealthProfile],
   );
 
   const value = {
     ready,
     signedIn,
     profile,
+    healthProfile,
     setProfile,
+    setHealthProfile,
     refreshProfile,
+    refreshHealthProfile,
     signIn,
     signUp,
     signOut,

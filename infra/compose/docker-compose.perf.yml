@@ -1,0 +1,52 @@
+# Configuration performance — stack allégée, ports alternatifs pour tests parallèles.
+# Usage : voir infra/compose/README.md
+
+services:
+  backend:
+    ports: !override
+      - "8100:8000"
+    depends_on: !reset
+      etl:
+        condition: service_completed_successfully
+      app-postgres:
+        condition: service_healthy
+
+  frontend-user:
+    ports: !override
+      - "85:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  nutrition-api:
+    profiles: ["perf-disabled"]
+
+  reco-engine:
+    profiles: ["perf-disabled"]
+
+  mongo:
+    profiles: ["perf-disabled"]
+
+  frontend:
+    profiles: ["perf-disabled"]
+
+  airflow-permissions:
+    profiles: ["perf-disabled"]
+
+  airflow-postgres:
+    profiles: ["perf-disabled"]
+
+  airflow-init:
+    profiles: ["perf-disabled"]
+
+  airflow-apiserver:
+    profiles: ["perf-disabled"]
+
+  airflow-scheduler:
+    profiles: ["perf-disabled"]
+
+  airflow-dag-processor:
+    profiles: ["perf-disabled"]
+
+  airflow-triggerer:
+    profiles: ["perf-disabled"]

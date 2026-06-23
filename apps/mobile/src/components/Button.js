@@ -1,6 +1,8 @@
-import { ActivityIndicator, Pressable, Text, StyleSheet } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
-import { colors, radius, spacing } from '../theme';
+import { ScalePressable } from './motion';
+import { colors, gradients, radius, shadows, spacing } from '../theme';
 
 export default function Button({
   title,
@@ -9,44 +11,88 @@ export default function Button({
   disabled = false,
   variant = 'primary',
   style,
+  size = 'md',
 }) {
   const isDisabled = disabled || loading;
+  const isGhost = variant === 'ghost';
+  const isDanger = variant === 'danger';
+
+  const content = loading ? (
+    <ActivityIndicator color={isGhost ? colors.primary : '#fff'} />
+  ) : (
+    <Text
+      style={[
+        styles.text,
+        isGhost && styles.ghostText,
+        size === 'sm' && styles.textSm,
+      ]}
+    >
+      {title}
+    </Text>
+  );
+
+  if (variant === 'primary' && !isDisabled) {
+    return (
+      <ScalePressable
+        onPress={onPress}
+        disabled={isDisabled}
+        style={[styles.wrap, size === 'sm' && styles.wrapSm, style]}
+      >
+        <LinearGradient
+          colors={gradients.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.base, styles.gradient, size === 'sm' && styles.baseSm, shadows.glow]}
+        >
+          {content}
+        </LinearGradient>
+      </ScalePressable>
+    );
+  }
+
   return (
-    <Pressable
+    <ScalePressable
       onPress={onPress}
       disabled={isDisabled}
-      style={({ pressed }) => [
+      style={[
         styles.base,
-        variant === 'ghost' && styles.ghost,
-        variant === 'danger' && styles.danger,
+        size === 'sm' && styles.baseSm,
+        isGhost && styles.ghost,
+        isDanger && styles.danger,
         isDisabled && styles.disabled,
-        pressed && !isDisabled && styles.pressed,
         style,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator color={variant === 'ghost' ? colors.primary : '#fff'} />
-      ) : (
-        <Text style={[styles.text, variant === 'ghost' && styles.ghostText]}>{title}</Text>
-      )}
-    </Pressable>
+      {content}
+    </ScalePressable>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: { borderRadius: radius.md, overflow: 'hidden' },
+  wrapSm: { alignSelf: 'flex-start' },
   base: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.xl,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: 52,
   },
-  ghost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border },
+  baseSm: {
+    minHeight: 40,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  gradient: { minHeight: 52 },
+  ghost: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: colors.borderLight,
+  },
   danger: { backgroundColor: colors.danger },
-  disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.85 },
-  text: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  disabled: { opacity: 0.45 },
+  text: { color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: 0.2 },
+  textSm: { fontSize: 14 },
   ghostText: { color: colors.text },
 });

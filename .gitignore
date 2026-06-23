@@ -81,7 +81,9 @@ graphify-out/
 # ---- Local subject PDF copies (official copies live in docs/) ----
 /*.pdf
 
-# ---- Environment variables ----
+# ---- Local backups (scripts infra/scripts/backup.sh) ----
+backups/
+
 .env
 .env.local
 .env.*.local

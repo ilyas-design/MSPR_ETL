@@ -1,9 +1,6 @@
 import { Redirect } from 'expo-router';
 
-import { useAuth } from '../src/auth/AuthContext';
-
+/** Point d'entrée `/` — la garde auth est dans app/_layout.js */
 export default function Index() {
-  const { ready, signedIn } = useAuth();
-  if (!ready) return null;
-  return <Redirect href={signedIn ? '/(tabs)' : '/(auth)/login'} />;
+  return <Redirect href="/(tabs)/dashboard" />;
 }

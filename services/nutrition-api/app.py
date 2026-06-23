@@ -22,6 +22,7 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-120b:free")
 # une limite trop basse tronque la réponse (cause n°1 des échecs intermittents).
 OPENROUTER_MAX_TOKENS = int(os.getenv("OPENROUTER_MAX_TOKENS", "6000"))
 LLM_MAX_ATTEMPTS = int(os.getenv("LLM_MAX_ATTEMPTS", "3"))
+MOCK_IA = os.getenv("MOCK_IA", "").lower() in ("1", "true", "yes")
 USDA_API_KEY = os.getenv("USDA_API_KEY")
 USDA_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
 
@@ -698,6 +699,16 @@ async def coach_advice(req: CoachAdviceRequest):
     Utilise les données de l'utilisateur (apports, cibles, déséquilibres)
     pour produire 2-3 paragraphes de coaching en français.
     """
+    if MOCK_IA:
+        return CoachAdviceResponse(
+            advice=(
+                "Mode offline : privilégie une collation riche en protéines "
+                "(150 g de fromage blanc 0 % ou 2 œufs) pour combler ton déficit. "
+                "Ajoute des légumes verts au dîner pour les fibres."
+            ),
+            model="mock-offline",
+        )
+
     if not OPENROUTER_API_KEY:
         raise HTTPException(
             status_code=503,
@@ -837,6 +848,26 @@ async def meal_plan_ai(req: MealPlanAIRequest):
     Génère un plan de repas via LLM (gpt-oss) avec de vraies recettes,
     ingrédients précis et grammages. Bien plus riche que le rule-based.
     """
+    if MOCK_IA:
+        return MealPlanAIResponse(
+            meals=[
+                MealPlanAIMeal(
+                    meal_type="lunch",
+                    dish_name="Déjeuner offline",
+                    ingredients=[
+                        MealPlanAIIngredient(name="Poulet grillé", quantity_g=120),
+                        MealPlanAIIngredient(name="Riz complet cuit", quantity_g=150),
+                    ],
+                    estimated_calories=520,
+                    estimated_protein=42.0,
+                )
+            ],
+            total_calories=520,
+            total_protein=42.0,
+            advice="Plan statique de démonstration (sans appel OpenRouter).",
+            model="mock-offline",
+        )
+
     if not OPENROUTER_API_KEY:
         raise HTTPException(
             status_code=503,

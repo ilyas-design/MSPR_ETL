@@ -1,46 +1,96 @@
-import { Text } from 'react-native';
+import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 
-import { colors } from '../../src/theme';
-
-function TabIcon({ icon, color }) {
-  return <Text style={{ fontSize: 22, color }}>{icon}</Text>;
-}
+import { TabIconAnimated } from '../../src/components/motion';
+import { colors, shadows, spacing } from '../../src/theme';
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTitleStyle: { color: colors.text },
-        headerTintColor: colors.text,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
+        headerStyle: {
+          backgroundColor: colors.bgElevated,
+          borderBottomWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        tabBarActiveTintColor: colors.primary,
+        headerTitleStyle: {
+          color: colors.text,
+          fontWeight: '700',
+          fontSize: 17,
+        },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
+        tabBarStyle: {
+          backgroundColor: colors.bgElevated,
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
+          height: Platform.OS === 'ios' ? 88 : 68,
+          paddingTop: spacing.sm,
+          paddingBottom: Platform.OS === 'ios' ? 28 : spacing.sm,
+          ...shadows.md,
+        },
+        tabBarActiveTintColor: colors.primaryLight,
         tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 2,
+        },
+        tabBarItemStyle: {
+          paddingVertical: spacing.xs,
+        },
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="dashboard"
         options={{
-          title: 'Fil',
-          tabBarIcon: ({ color }) => <TabIcon icon="🏠" color={color} />,
+          title: 'Accueil',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIconAnimated icon="🏠" color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="create"
+        name="meals"
         options={{
-          title: 'Publier',
-          tabBarIcon: ({ color }) => <TabIcon icon="➕" color={color} />,
+          title: 'Repas',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIconAnimated icon="🍽️" color={color} focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="sport"
+        options={{
+          title: 'Sport',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIconAnimated icon="🏋️" color={color} focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Social',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIconAnimated icon="💬" color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profil',
-          tabBarIcon: ({ color }) => <TabIcon icon="👤" color={color} />,
+          title: 'Compte',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIconAnimated icon="👤" color={color} focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="create"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

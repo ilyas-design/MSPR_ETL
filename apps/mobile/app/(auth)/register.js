@@ -2,16 +2,19 @@ import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Text,
-  TextInput,
-  View,
+  ScrollView,
   StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { Link } from 'expo-router';
 
 import Button from '../../src/components/Button';
+import FormInput from '../../src/components/FormInput';
+import GradientBackground from '../../src/components/GradientBackground';
+import { FadeInView } from '../../src/components/motion';
 import { useAuth } from '../../src/auth/AuthContext';
-import { colors, radius, spacing } from '../../src/theme';
+import { colors, radius, spacing, typography } from '../../src/theme';
 
 export default function Register() {
   const { signUp } = useAuth();
@@ -45,80 +48,93 @@ export default function Register() {
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
-    >
-      <View style={styles.inner}>
-        <Text style={styles.title}>Créer un compte</Text>
+    <GradientBackground>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.container}
+      >
+        <ScrollView
+          contentContainerStyle={styles.inner}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <FadeInView delay={0} style={styles.header}>
+            <Text style={styles.title}>Créer un compte</Text>
+            <Text style={styles.subtitle}>Rejoins la communauté HealthAI Coach</Text>
+          </FadeInView>
 
-        <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="Identifiant"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={username}
-            onChangeText={setUsername}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Email (optionnel)"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Mot de passe (8 caractères min.)"
-            placeholderTextColor={colors.textMuted}
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+          <FadeInView delay={100} style={styles.formCard}>
+            <FormInput
+              label="Identifiant"
+              placeholder="Choisis un identifiant"
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={username}
+              onChangeText={setUsername}
+            />
+            <FormInput
+              label="Email"
+              placeholder="optionnel@email.com"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
+            <FormInput
+              label="Mot de passe"
+              placeholder="8 caractères minimum"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              hint="Au moins 8 caractères"
+            />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Button title="S'inscrire" onPress={onSubmit} loading={loading} />
+            <Button title="S'inscrire" onPress={onSubmit} loading={loading} style={styles.submit} />
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Déjà inscrit ?</Text>
-            <Link href="/(auth)/login" style={styles.link}>
-              Se connecter
-            </Link>
-          </View>
-        </View>
-      </View>
-    </KeyboardAvoidingView>
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Déjà inscrit ?</Text>
+              <Link href="/(auth)/login" style={styles.link}>
+                Se connecter
+              </Link>
+            </View>
+          </FadeInView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </GradientBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  inner: { flex: 1, justifyContent: 'center', padding: spacing.xl },
-  title: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: spacing.xl,
+  container: { flex: 1 },
+  inner: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: spacing.xl,
+    paddingVertical: spacing.xxl * 2,
+    gap: spacing.lg,
   },
-  form: { gap: spacing.md },
-  input: {
-    backgroundColor: colors.surface,
+  header: { alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm },
+  title: { ...typography.hero, color: colors.text, fontSize: 28, textAlign: 'center' },
+  subtitle: { ...typography.subtitle, color: colors.textMuted, textAlign: 'center' },
+  formCard: {
+    backgroundColor: 'rgba(22, 25, 34, 0.85)',
+    borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    color: colors.text,
-    fontSize: 16,
+    padding: spacing.xl,
+    gap: spacing.md,
   },
-  error: { color: colors.danger, fontSize: 14 },
-  footer: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.md },
+  error: { color: colors.danger, fontSize: 14, textAlign: 'center' },
+  submit: { marginTop: spacing.sm },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    flexWrap: 'wrap',
+  },
   footerText: { color: colors.textMuted },
-  link: { color: colors.primary, fontWeight: '700' },
+  link: { color: colors.primaryLight, fontWeight: '700' },
 });

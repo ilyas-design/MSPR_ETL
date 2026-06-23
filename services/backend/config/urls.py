@@ -53,6 +53,7 @@ router.register(r'me/workouts', WorkoutSessionViewSet, basename='me-workouts')
 router.register(r'social/posts', PostViewSet, basename='social-posts')
 
 urlpatterns = [
+    path('', include('django_prometheus.urls')),
     path('api/', include(router.urls)),
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

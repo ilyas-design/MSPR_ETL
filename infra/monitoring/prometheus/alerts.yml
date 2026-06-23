@@ -1,0 +1,19 @@
+groups:
+  - name: healthai-stack
+    rules:
+      - alert: BackendDown
+        expr: up{job="django-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend Django indisponible"
+          description: "Prometheus ne scrape plus /metrics sur le backend depuis 1 minute."
+
+      - alert: PostgresExporterDown
+        expr: up{job="postgres-app"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "postgres-exporter (app) indisponible"

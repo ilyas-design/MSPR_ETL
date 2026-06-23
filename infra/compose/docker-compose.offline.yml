@@ -1,0 +1,14 @@
+# Configuration offline — mocks IA, pas d'appels OpenRouter/USDA externes.
+# Usage : voir infra/compose/README.md
+
+services:
+  nutrition-api:
+    environment:
+      MOCK_IA: "true"
+      OPENROUTER_API_KEY: ""
+      USDA_API_KEY: ""
+
+  reco-engine:
+    environment:
+      MOCK_IA: "true"
+      OPENROUTER_API_KEY: ""

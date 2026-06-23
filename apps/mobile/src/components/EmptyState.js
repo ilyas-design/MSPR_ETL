@@ -1,18 +1,39 @@
-import { Text, View, StyleSheet } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, spacing } from '../theme';
+import { FadeInView } from './motion';
+import { colors, radius, spacing, typography } from '../theme';
 
-export default function EmptyState({ title, subtitle }) {
+export default function EmptyState({ title, subtitle, icon = '📭' }) {
   return (
-    <View style={styles.wrap}>
+    <FadeInView style={styles.wrap}>
+      <View style={styles.iconCircle}>
+        <Text style={styles.icon}>{icon}</Text>
+      </View>
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-    </View>
+    </FadeInView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.sm },
-  title: { color: colors.text, fontSize: 18, fontWeight: '700', textAlign: 'center' },
-  subtitle: { color: colors.textMuted, fontSize: 14, textAlign: 'center' },
+  wrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xxl,
+    gap: spacing.sm,
+  },
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  icon: { fontSize: 32 },
+  title: { ...typography.title, color: colors.text, textAlign: 'center', fontSize: 18 },
+  subtitle: { ...typography.subtitle, color: colors.textMuted, textAlign: 'center' },
 });

@@ -62,9 +62,10 @@ export default function Feed() {
   );
 
   const renderItem = useCallback(
-    ({ item }) => (
+    ({ item, index }) => (
       <PostCard
         post={item}
+        index={index}
         canDelete={profile?.username && item.author?.username === profile.username}
         onToggleLike={(p) => likeMutation.mutate(p)}
         onOpenComments={(p) => router.push(`/post/${p.id}`)}

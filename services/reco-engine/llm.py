@@ -9,7 +9,7 @@ from typing import Any, Callable, Optional
 
 import httpx
 
-from models import WorkoutPlanAIRequest, WorkoutPlanAIResponse
+from models import WorkoutPlanAIRequest, WorkoutPlanAIResponse, WorkoutExercise, WorkoutSessionAI
 
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', '')
 OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'openai/gpt-oss-120b:free')
@@ -18,6 +18,7 @@ OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 # une marge large évite les réponses tronquées (cause n°1 des échecs).
 OPENROUTER_MAX_TOKENS = int(os.environ.get('OPENROUTER_MAX_TOKENS', '6000'))
 LLM_MAX_ATTEMPTS = int(os.environ.get('LLM_MAX_ATTEMPTS', '3'))
+MOCK_IA = os.environ.get('MOCK_IA', '').lower() in ('1', 'true', 'yes')
 
 WORKOUT_GOAL_LABELS_FR = {
     'weight_loss': 'perte de graisse — cardio modéré et polyarticulaires',
@@ -54,6 +55,26 @@ async def generate_workout_plan_ai(
     *,
     llm_post: Optional[Callable[..., Any]] = None,
 ) -> WorkoutPlanAIResponse:
+    if MOCK_IA and llm_post is None:
+        return WorkoutPlanAIResponse(
+            weekly_plan=[
+                WorkoutSessionAI(
+                    day_label='Jour 1 (offline)',
+                    focus='Renforcement général',
+                    estimated_duration_min=req.session_duration_min,
+                    estimated_calories=250,
+                    warm_up=['Marche sur place 5 min'],
+                    exercises=[
+                        WorkoutExercise(name='Squats au poids du corps', sets=3, reps='12', rest_seconds=60),
+                    ],
+                    cool_down=['Étirements jambes'],
+                )
+            ],
+            progression_tips='Mode offline : augmente les reps de 2 par semaine.',
+            rotation_note='Alterne cardio et renforcement les semaines suivantes.',
+            model='mock-offline',
+        )
+
     if not OPENROUTER_API_KEY and llm_post is None:
         raise RuntimeError('OPENROUTER_API_KEY non configurée.')
 

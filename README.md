@@ -1,252 +1,261 @@
-# HealthAI Coach — MSPR 2
+# HealthAI Coach
 
-Plateforme de santé connectée avec pipeline ETL, API REST Django, reconnaissance d'image IA (HuggingFace) et interface React. Orchestrée par Apache Airflow et packagée avec Docker Compose.
+Plateforme de coaching santé et d’activité physique : pipeline ETL, API REST, microservices IA, applications web et mobile. Projet MSPR — **TPRE501/502** (data & web) et **TPRE601** (industrialisation & mobile).
 
-## Architecture
-
-```
-Internet
-   │
-   ▼ :80
-frontend (nginx)          ← React/Vite buildé, sert les fichiers statiques
-   │ proxifie /api/*
-   ▼
-backend (Django + gunicorn)
-   │                  │
-   ▼                  ▼
-app-postgres       SQLite (/data/mspr_etl.db)
-(PostgreSQL 16)    (données ETL — patients, nutrition, sport)
-comptes, profils,
-repas analysés
-   │
-   ▼ httpx interne
-nutrition-api (FastAPI + HuggingFace)   ← jamais exposé sur internet
-   │
-   └── lit SQLite pour les macros
-```
-
-### Services Docker
-
-| Service | Port | Rôle |
-|---|---|---|
-| `frontend` | 80 | nginx — app admin MSPR1 + proxy `/api` |
-| `frontend-user` | 81 | nginx — app utilisateur MSPR2 + proxy `/api` |
-| `backend` | interne 8000 | Django REST API + JWT + proxy IA |
-| `app-postgres` | interne 5432 | PostgreSQL — comptes utilisateurs, profils, repas |
-| `mongo` | interne 27017 | MongoDB — plans repas / entraînement sauvegardés (IA) |
-| `nutrition-api` | interne 8001 | FastAPI — reconnaissance d'image IA + plans repas |
-| `etl` | — | One-shot Python/Pandas — génère `mspr_etl.db` depuis les CSV/JSON |
-| `airflow-apiserver` | 8081 | Interface Airflow (UI) |
-| `airflow-scheduler` | interne | Planificateur — relance l'ETL quotidiennement à 02h00 |
-| `airflow-postgres` | interne 5432 | PostgreSQL — état interne Airflow uniquement |
-
-### Deux bases de données
-
-| Base | Technologie | Contenu | Géré par |
-|---|---|---|---|
-| ETL | SQLite (`/data/mspr_etl.db`) | `patient`, `sante`, `nutrition`, `activite_physique`, `gym_session`, `food_log`, `exercise` | Pipeline ETL + Airflow |
-| App | PostgreSQL (`app-postgres`) | `auth_user`, `UserProfile`, `MealEntry`, `PendingChange` | Django migrations |
-
-Le routeur Django (`api/db_router.py`) choisit automatiquement la bonne base : `managed=False` → SQLite, `managed=True` → PostgreSQL.
-
-### Ce que génère l'ETL
-
-| Table SQLite | Source CSV/JSON |
-|---|---|
-| `patient` | `diet_recommendations.csv` |
-| `sante` | `diet_recommendations.csv` |
-| `nutrition` | `diet_recommendations.csv` |
-| `activite_physique` | `diet_recommendations.csv` |
-| `gym_session` | `gym_members_exercise.csv` |
-| `food_log` | `daily_food_nutrition.csv` |
-| `exercise` | `exercises.json` |
+Environnement de démonstration **100 % local** (Docker Compose sur poste développeur).
 
 ---
 
-## Lancer avec Docker (recommandé)
+## Sommaire
 
-Prérequis : [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [Vue d’ensemble](#vue-densemble)
+- [Démarrage rapide](#démarrage-rapide)
+- [Services & URLs](#services--urls)
+- [Architecture](#architecture)
+- [Configurations](#configurations)
+- [Application mobile](#application-mobile)
+- [Développement natif](#développement-natif)
+- [Tests & qualité](#tests--qualité)
+- [Documentation](#documentation)
+- [Structure du dépôt](#structure-du-dépôt)
+
+---
+
+## Vue d’ensemble
+
+| Couche | Rôle |
+|--------|------|
+| **ETL** (Python / Pandas) | Ingestion CSV/JSON → base SQLite normalisée |
+| **Backend** (Django REST + JWT) | API métier, auth, réseau social, proxy IA |
+| **Microservices IA** (FastAPI) | Reconnaissance alimentaire, plans repas/sport (LLM) |
+| **Frontends** (React / Vite) | Back-office admin + parcours utilisateur |
+| **Mobile** (Expo / React Native) | Mini réseau social (fil, publications, profil) |
+| **Airflow** | Orchestration du pipeline ETL (quotidien 02h00) |
+| **Monitoring** (optionnel) | Prometheus, Grafana, Loki |
+
+**Flux de données :**
+
+```
+CSV / JSON  →  ETL  →  SQLite (mspr_etl.db)  →  API Django  →  Web / Mobile
+                              ↓
+                    PostgreSQL (comptes, social)
+                              ↓
+                         MongoDB (plans IA)
+```
+
+---
+
+## Démarrage rapide
+
+### Prérequis
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (recommandé)
+- Fichier d’environnement : `cp .env.example .env` puis renseigner au minimum `SECRET_KEY`
+
+### Stack complète (une commande)
 
 ```bash
 docker compose up --build
 ```
 
-- App admin (MSPR1) : **http://localhost**
-- App utilisateur (MSPR2) : **http://localhost:81**
-- Airflow UI : **http://localhost:8081** (login : `airflow` / `airflow`)
+Au premier lancement, l’ETL génère la base SQLite ; le backend et les frontends démarrent une fois les dépendances saines.
 
-L'ordre de démarrage est géré automatiquement : ETL → app-postgres + mongo + nutrition-api → backend → frontend + frontend-user.
-
-Pour relancer sans reconstruire :
+### Avec monitoring (TPRE601)
 
 ```bash
-docker compose up
+docker compose --profile monitoring up --build -d
 ```
+
+Scripts de vérification : `infra/monitoring/scripts/verify-*.sh`
 
 ---
 
-## Lancer sans Docker
+## Services & URLs
 
-### Prérequis
+| Service | URL locale | Identifiants / notes |
+|---------|------------|----------------------|
+| Frontend admin | http://localhost | nginx |
+| Frontend utilisateur | http://localhost:81 | nginx |
+| API Django | http://localhost:8000 | Swagger : `/api/schema/swagger-ui/` |
+| Airflow | http://localhost:8080 | `airflow` / `airflow` |
+| Grafana *(monitoring)* | http://localhost:3000 | `admin` / `admin` |
+| Prometheus *(monitoring)* | http://localhost:9090 | — |
 
-- Python 3.12+
-- Node.js 22+
-- PostgreSQL 16 (pour le backend)
+L’API est exposée sur le port **8000** pour permettre à l’**app mobile** (Expo Go) de joindre le backend via l’IP LAN du PC.
 
-### 1. Environnement virtuel Python
+---
 
-**Linux / macOS / Git Bash :**
-```bash
-python -m venv .venv
-source .venv/bin/activate
+## Architecture
+
+```
+                    ┌─────────────┐     ┌──────────────┐
+                    │ frontend    │     │ frontend-user│
+                    │   :80       │     │    :81       │
+                    └──────┬──────┘     └──────┬───────┘
+                           └────────┬──────────┘
+                                    │ /api/*
+                           ┌────────▼────────┐
+                           │    backend      │ :8000
+                           └───┬───┬────┬────┘
+                               │   │    │
+              ┌────────────────┘   │    └────────────────┐
+              ▼                    ▼                     ▼
+       app-postgres          nutrition-api         reco-engine
+       (PostgreSQL)          (FastAPI :8001)        (FastAPI :8002)
+              │                    │                     │
+              │                    └──────────┬──────────┘
+              │                               ▼
+              │                    SQLite /data/mspr_etl.db
+              │                               ▲
+              │                               │ (volume partagé)
+              └───────────────────────────────┤
+                                              │
+                                         etl (one-shot)
+                                              │
+                                         mongo (plans IA)
+
+     Airflow (scheduler, DAG mspr_daily_etl) ──► relance ETL planifiée
+     Profile monitoring ──► Prometheus · Grafana · Loki · Promtail
 ```
 
-**Windows PowerShell :**
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
+### Bases de données
 
-### 2. ETL — générer la base SQLite
+| Base | Moteur | Contenu |
+|------|--------|---------|
+| ETL | SQLite (`mspr_etl.db`) | Patients, santé, nutrition, activité, exercices — schéma `etl/sql/BDD.sql` |
+| App | PostgreSQL | Auth Django, profils, repas analysés, réseau social |
+| Plans IA | MongoDB | Plans repas / sport générés par LLM |
+| Airflow | PostgreSQL *(dédié)* | Métadonnées orchestration uniquement |
+
+---
+
+## Configurations
+
+Trois profils reproductibles (exigence TPRE601) :
+
+| Configuration | Commande | Usage |
+|---------------|----------|--------|
+| **Complète** | `docker compose up --build -d` | Tous les services + IA + Airflow |
+| **Offline** | `./infra/scripts/up-offline.sh` | Mocks IA, sans OpenRouter |
+| **Performance** | `./infra/scripts/up-perf.sh` | Stack minimale (ports 8100 / 85) |
+
+Détails : [`infra/compose/README.md`](infra/compose/README.md)
+
+### Sauvegarde & restauration
 
 ```bash
+./infra/scripts/backup.sh
+./infra/scripts/restore.sh backups/<horodatage>
+./infra/scripts/reset.sh --yes          # remise à zéro (supprime les volumes)
+```
+
+Guide : [`docs/deployment/BACKUP.md`](docs/deployment/BACKUP.md)
+
+---
+
+## Application mobile
+
+Mini réseau social Expo (Android / iOS) : fil de publications, likes, commentaires, profil.
+
+```bash
+cd apps/mobile
+cp .env.example .env    # EXPO_PUBLIC_API_BASE_URL → IP LAN ou 10.0.2.2 (Android)
+npm install
+npx expo start
+```
+
+| Mode | Variable |
+|------|----------|
+| API réelle | `EXPO_PUBLIC_USE_MOCKS=0` + backend joignable sur le réseau local |
+| Offline / démo | `EXPO_PUBLIC_USE_MOCKS=1` |
+
+Documentation complète : [`apps/mobile/README.md`](apps/mobile/README.md)
+
+---
+
+## Développement natif
+
+Alternative sans Docker (ETL → backend → frontend) :
+
+```bash
+./run.sh                    # pipeline + backend + frontend admin
+./run.sh --skip-pipeline    # si mspr_etl.db existe déjà
+```
+
+Étapes manuelles :
+
+```bash
+# ETL
 pip install -r etl/requirements.txt
 python etl/run_pipeline.py
-# → génère mspr_etl.db à la racine
+
+# Backend
+cd services/backend && pip install -r requirements.txt
+python manage.py migrate && python manage.py runserver
+
+# Frontend
+cd apps/frontend-admin && npm install && npm run dev
 ```
 
-Options :
-```bash
-python etl/run_pipeline.py --db-path custom.db  # chemin personnalisé
-python etl/run_pipeline.py --no-validate        # désactiver la validation
-python etl/run_pipeline.py --no-report          # désactiver le rapport
-```
-
-### 3. Backend — API Django
-
-```bash
-cd services/backend
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver
-# → http://localhost:8000
-# Swagger : http://localhost:8000/api/schema/swagger-ui/
-```
-
-### 4. nutrition-api — microservice IA
-
-```bash
-cd services/nutrition-api
-pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
-NUTRITION_API_DB_PATH=../../mspr_etl.db uvicorn app:app --port 8001
-# → http://localhost:8001
-```
-
-### 5. Frontend — React
-
-```bash
-cd apps/frontend-admin   # (ou apps/frontend-user)
-npm install
-npm run dev
-# → http://localhost:5173 (proxy /api → localhost:8000)
-```
+Variables : voir [`.env.example`](.env.example).
 
 ---
 
-## API — endpoints principaux
-
-### Authentification
-
-```
-POST /api/auth/register/      Créer un compte + profil
-POST /api/auth/token/         Obtenir un token JWT
-POST /api/auth/token/refresh/ Rafraîchir le token
-GET  /api/auth/me/            Utilisateur connecté
-```
-
-### Profil utilisateur
-
-```
-GET   /api/me/profile/  Lire son profil
-PATCH /api/me/profile/  Modifier objectif, allergies, équipement...
-```
-
-### Données ETL (lecture seule)
-
-```
-GET /api/food-logs/    Données nutritionnelles journalières
-GET /api/exercises/    Catalogue d'exercices
-GET /api/patients/     Données patients
-GET /api/nutrition/    Données nutrition
-```
-
-### IA — reconnaissance d'image
-
-```
-POST /api/ai/analyze/    Image → aliments détectés + calories + macros
-POST /api/ai/meal-plan/  Paramètres → plan repas personnalisé
-GET  /api/me/meals/      Historique des analyses (stocké en base)
-```
-
----
-
-## Tester la reconnaissance d'image
+## Tests & qualité
 
 ```bash
-# 1. Créer un compte
-curl -X POST http://localhost/api/auth/register/ \
-  -H "Content-Type: application/json" \
-  -d '{"username":"test","password":"test1234","goal":"weight_loss"}'
-
-# 2. Obtenir un token JWT
-curl -X POST http://localhost/api/auth/token/ \
-  -H "Content-Type: application/json" \
-  -d '{"username":"test","password":"test1234"}'
-
-# 3. Analyser une photo de nourriture
-curl -X POST http://localhost/api/ai/analyze/ \
-  -H "Authorization: Bearer <access_token>" \
-  -F "file=@pizza.jpg"
-
-# 4. Générer un plan repas
-curl -X POST http://localhost/api/ai/meal-plan/ \
-  -H "Authorization: Bearer <access_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"goal":"weight_loss","calorie_target":1800,"meals_per_day":3}'
-
-# 5. Voir l'historique des repas analysés
-curl http://localhost/api/me/meals/ \
-  -H "Authorization: Bearer <access_token>"
-```
-
----
-
-## Variables d'environnement
-
-| Variable | Défaut | Description |
-|---|---|---|
-| `SECRET_KEY` | valeur de dev | Clé secrète Django |
-| `DEBUG` | `False` | Mode debug Django |
-| `DB_PATH` | `/data/mspr_etl.db` | Chemin SQLite ETL |
-| `POSTGRES_HOST` | `app-postgres` | Hôte PostgreSQL app |
-| `POSTGRES_DB` | `healthai` | Nom de la base app |
-| `POSTGRES_USER` | `healthai` | Utilisateur PostgreSQL |
-| `POSTGRES_PASSWORD` | `healthai` | Mot de passe PostgreSQL |
-| `NUTRITION_API_URL` | `http://nutrition-api:8001` | URL interne du microservice IA |
-
----
-
-## Tests
-
-```bash
-# Tests ETL (depuis etl/)
+# ETL
 cd etl && python -m unittest discover -s tests -v
 
-# Tests backend Django
-cd services/backend
-python manage.py test -v 2
+# Backend Django
+cd services/backend && python manage.py test -v 2
 
-# Couverture complète
+# Couverture globale
 ./run_coverage.sh
-./run_coverage.sh --html  # → htmlcov/
+./run_coverage.sh --html
 ```
+
+CI GitHub Actions : audit dépendances, SAST, Trivy, builds et tests (voir [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+---
+
+## Documentation
+
+| Sujet | Fichier |
+|-------|---------|
+| Soutenance & architecture détaillée | [`docs/README_SOUTENANCE.md`](docs/README_SOUTENANCE.md) |
+| Docker (topologie, volumes) | [`docs/DOCKER.md`](docs/DOCKER.md) |
+| Monitoring | [`docs/monitoring/README.md`](docs/monitoring/README.md) |
+| Environnements Compose | [`infra/compose/README.md`](infra/compose/README.md) |
+| Backup / restore | [`docs/deployment/BACKUP.md`](docs/deployment/BACKUP.md) |
+| Reste à faire TPRE601 | [`docs/MSPR3_TPRE601_RESTE_A_FAIRE.md`](docs/MSPR3_TPRE601_RESTE_A_FAIRE.md) |
+
+---
+
+## Structure du dépôt
+
+```
+apps/
+  frontend-admin/     Back-office React
+  frontend-user/      Parcours utilisateur React
+  mobile/             App Expo (réseau social)
+services/
+  backend/            API Django REST
+  nutrition-api/      IA nutrition (FastAPI)
+  reco-engine/        Recommandations & plans sport (FastAPI)
+etl/                  Pipeline, données sources, tests
+orchestration/airflow/  DAGs et orchestration ETL
+infra/
+  monitoring/         Prometheus, Grafana, Loki
+  compose/            Overrides multi-environnement
+  scripts/            up-full, up-offline, backup, restore, reset
+docs/                 Documentation projet & soutenance
+docker-compose.yml    Stack principale
+.env.example          Variables d'environnement documentées
+```
+
+---
+
+## Licence & contexte
+
+Projet académique MSPR (B3 CDA/DIADS — EPSI). Données de démonstration fournies dans `etl/data/`. Ne pas utiliser en production sans durcissement sécurité (secrets, HTTPS, bases managées).
