@@ -1,6 +1,6 @@
 x-airflow-common: &airflow-common
   build:
-    context: ./airflow
+    context: ./orchestration/airflow
     dockerfile: Dockerfile
   image: ${AIRFLOW_IMAGE_NAME:-mspr-airflow:latest}
   env_file:
@@ -20,10 +20,10 @@ x-airflow-common: &airflow-common
     PYTHONDONTWRITEBYTECODE: "1"
     PYTHONUNBUFFERED: "1"
   volumes:
-    - ./airflow/dags:/opt/airflow/dags
-    - ./airflow/logs:/opt/airflow/logs
-    - ./airflow/plugins:/opt/airflow/plugins
-    - ./airflow/config:/opt/airflow/config
+    - ./orchestration/airflow/dags:/opt/airflow/dags
+    - ./orchestration/airflow/logs:/opt/airflow/logs
+    - ./orchestration/airflow/plugins:/opt/airflow/plugins
+    - ./orchestration/airflow/config:/opt/airflow/config
     - ./:/opt/airflow/project
     - sqlite_data:/data
   user: "${AIRFLOW_UID:-50000}:0"
@@ -78,7 +78,7 @@ services:
 
   nutrition-api:
     build:
-      context: ./nutrition-api
+      context: ./services/nutrition-api
     volumes:
       - sqlite_data:/data
     environment:
@@ -103,7 +103,7 @@ services:
 
   reco-engine:
     build:
-      context: ./reco-engine
+      context: ./services/reco-engine
     volumes:
       - sqlite_data:/data
     environment:
@@ -133,7 +133,11 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: ./services/backend
+    ports:
+      # Exposé sur l'hôte pour que l'app mobile (Expo Go sur un téléphone
+      # physique) puisse joindre l'API via l'IP LAN du PC : http://<IP>:8000
+      - "8000:8000"
     volumes:
       - sqlite_data:/data
     environment:
@@ -181,7 +185,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./apps/frontend-admin
     ports:
       - "80:80"
     depends_on:
@@ -190,7 +194,7 @@ services:
 
   frontend-user:
     build:
-      context: ./frontend-user
+      context: ./apps/frontend-user
     ports:
       - "81:80"
     depends_on:
@@ -203,10 +207,10 @@ services:
       sh -c "mkdir -p /data/reports /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins /opt/airflow/config
       && chmod -R 777 /data /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins /opt/airflow/config"
     volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
-      - ./airflow/plugins:/opt/airflow/plugins
-      - ./airflow/config:/opt/airflow/config
+      - ./orchestration/airflow/dags:/opt/airflow/dags
+      - ./orchestration/airflow/logs:/opt/airflow/logs
+      - ./orchestration/airflow/plugins:/opt/airflow/plugins
+      - ./orchestration/airflow/config:/opt/airflow/config
       - sqlite_data:/data
     restart: "no"
 

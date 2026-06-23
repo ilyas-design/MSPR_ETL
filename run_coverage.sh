@@ -61,10 +61,10 @@ if ! python -m coverage --version >/dev/null 2>&1; then
   python -m pip install --quiet coverage
 fi
 
-python -m pip install --quiet -r requirements.txt
-python -m pip install --quiet -r backend/requirements.txt
-python -m pip install --quiet -r nutrition-api/requirements.txt
-python -m pip install --quiet -r reco-engine/requirements.txt
+python -m pip install --quiet -r etl/requirements.txt
+python -m pip install --quiet -r services/backend/requirements.txt
+python -m pip install --quiet -r services/nutrition-api/requirements.txt
+python -m pip install --quiet -r services/reco-engine/requirements.txt
 
 # --- Environment for Django tests ----------------------------------------
 if [ -f ".env" ]; then
@@ -88,24 +88,24 @@ export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-healthai}"
 python -m coverage erase
 
 echo "==> ETL / unit tests"
-python -m coverage run --rcfile=.coveragerc -m unittest discover -s tests -v
+PYTHONPATH=etl python -m coverage run --rcfile=.coveragerc -m unittest discover -s etl/tests -v
 
 echo "==> Django API tests"
 (
-  cd backend
-  python -m coverage run --append --rcfile=../.coveragerc manage.py test -v 2
+  cd services/backend
+  python -m coverage run --append --rcfile=../../.coveragerc manage.py test -v 2
 )
 
 echo "==> nutrition-api tests"
 (
-  cd nutrition-api
-  python -m coverage run --append --rcfile=../.coveragerc --source=app -m pytest -v
+  cd services/nutrition-api
+  python -m coverage run --append --rcfile=../../.coveragerc --source=app -m pytest -v
 )
 
 echo "==> reco-engine tests"
 (
-  cd reco-engine
-  python -m coverage run --append --rcfile=../.coveragerc --source=scoring,main,mongo,seed,llm,models -m pytest -v
+  cd services/reco-engine
+  python -m coverage run --append --rcfile=../../.coveragerc --source=scoring,main,mongo,seed,llm,models -m pytest -v
 )
 
 echo "==> Combined Python coverage report"
@@ -118,7 +118,7 @@ fi
 
 echo "==> frontend-user tests (Vitest)"
 (
-  cd frontend-user
+  cd apps/frontend-user
   if [ ! -d node_modules ]; then
     npm install
   fi

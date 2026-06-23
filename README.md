@@ -110,22 +110,22 @@ python -m venv .venv
 ### 2. ETL — générer la base SQLite
 
 ```bash
-pip install -r requirements.txt
-python run_pipeline.py
+pip install -r etl/requirements.txt
+python etl/run_pipeline.py
 # → génère mspr_etl.db à la racine
 ```
 
 Options :
 ```bash
-python run_pipeline.py --db-path custom.db  # chemin personnalisé
-python run_pipeline.py --no-validate        # désactiver la validation
-python run_pipeline.py --no-report          # désactiver le rapport
+python etl/run_pipeline.py --db-path custom.db  # chemin personnalisé
+python etl/run_pipeline.py --no-validate        # désactiver la validation
+python etl/run_pipeline.py --no-report          # désactiver le rapport
 ```
 
 ### 3. Backend — API Django
 
 ```bash
-cd backend
+cd services/backend
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py runserver
@@ -136,16 +136,16 @@ python manage.py runserver
 ### 4. nutrition-api — microservice IA
 
 ```bash
-cd nutrition-api
+cd services/nutrition-api
 pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
-NUTRITION_API_DB_PATH=../mspr_etl.db uvicorn app:app --port 8001
+NUTRITION_API_DB_PATH=../../mspr_etl.db uvicorn app:app --port 8001
 # → http://localhost:8001
 ```
 
 ### 5. Frontend — React
 
 ```bash
-cd frontend
+cd apps/frontend-admin   # (ou apps/frontend-user)
 npm install
 npm run dev
 # → http://localhost:5173 (proxy /api → localhost:8000)
@@ -239,11 +239,11 @@ curl http://localhost/api/me/meals/ \
 ## Tests
 
 ```bash
-# Tests ETL
-python -m unittest discover -s tests -v
+# Tests ETL (depuis etl/)
+cd etl && python -m unittest discover -s tests -v
 
 # Tests backend Django
-cd backend
+cd services/backend
 python manage.py test -v 2
 
 # Couverture complète

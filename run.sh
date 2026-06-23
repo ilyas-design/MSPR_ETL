@@ -3,7 +3,7 @@
 # HealthAI Coach — full stack launcher
 #
 # Runs, in order:
-#   1. ETL pipeline       (python run_pipeline.py) -> produces mspr_etl.db
+#   1. ETL pipeline       (python etl/run_pipeline.py) -> produces mspr_etl.db
 #   2. Django backend     (http://localhost:8000)  -> background
 #   3. React frontend     (http://localhost:5173)  -> foreground
 #
@@ -126,19 +126,19 @@ if [ "$SKIP_INSTALL" -eq 0 ]; then
   log "Upgrading pip"
   "$PYTHON_BIN" -m pip install --quiet --upgrade pip
 
-  log "Installing ETL dependencies (requirements.txt)"
-  pip install --quiet -r requirements.txt
+  log "Installing ETL dependencies (etl/requirements.txt)"
+  pip install --quiet -r etl/requirements.txt
 
   if [ "$SKIP_BACKEND" -eq 0 ]; then
-    log "Installing backend dependencies (backend/requirements.txt)"
-    pip install --quiet -r backend/requirements.txt
+    log "Installing backend dependencies (services/backend/requirements.txt)"
+    pip install --quiet -r services/backend/requirements.txt
   fi
 fi
 
 # --- 3. ETL pipeline ------------------------------------------------------
 if [ "$SKIP_PIPELINE" -eq 0 ]; then
   log "Running ETL pipeline"
-  python run_pipeline.py
+  python etl/run_pipeline.py
 else
   log "Skipping ETL pipeline (--skip-pipeline)"
 fi
@@ -146,11 +146,11 @@ fi
 # --- 4. Backend (Django) --------------------------------------------------
 if [ "$SKIP_BACKEND" -eq 0 ]; then
   log "Applying Django migrations"
-  (cd backend && python manage.py migrate --noinput)
+  (cd services/backend && python manage.py migrate --noinput)
 
   log "Starting Django backend on http://localhost:8000 (logs: logs/backend.log)"
   (
-    cd backend
+    cd services/backend
     exec python manage.py runserver 0.0.0.0:8000 --noreload
   ) >"$LOG_DIR/backend.log" 2>&1 &
   BACKEND_PID=$!
@@ -171,7 +171,7 @@ fi
 
 # --- 5. Frontend (Vite) ---------------------------------------------------
 if [ "$SKIP_FRONTEND" -eq 0 ]; then
-  cd "$SCRIPT_DIR/frontend"
+  cd "$SCRIPT_DIR/apps/frontend-admin"
 
   if [ "$SKIP_INSTALL" -eq 0 ] && [ ! -d "node_modules" ]; then
     log "Installing frontend dependencies (npm install)"

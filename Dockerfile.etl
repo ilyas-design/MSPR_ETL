@@ -5,17 +5,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY etl/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY Pipelines/ ./Pipelines/
-COPY run_pipeline.py .
-COPY *.csv .
-COPY exercises.json .
+COPY etl/Pipelines/ ./Pipelines/
+COPY etl/sql/ ./sql/
+COPY etl/run_pipeline.py .
+COPY etl/data/ ./data/
 
 RUN mkdir -p /data /data/reports
 
 CMD ["python", "run_pipeline.py", \
      "--db-path", "/data/mspr_etl.db", \
-     "--data-dir", ".", \
+     "--data-dir", "data", \
      "--report-dir", "/data/reports"]

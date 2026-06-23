@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "HealthAI Social",
+    "slug": "healthai-social",
+    "scheme": "healthaicoach",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "package": "com.healthai.social"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "HealthAI a besoin d'accéder à vos photos pour publier des médias dans le flux.",
+          "cameraPermission": "HealthAI a besoin de la caméra pour prendre une photo à publier."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
