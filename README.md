@@ -36,7 +36,7 @@ nutrition-api (FastAPI + HuggingFace)   ← jamais exposé sur internet
 | `mongo` | interne 27017 | MongoDB — plans repas / entraînement sauvegardés (IA) |
 | `nutrition-api` | interne 8001 | FastAPI — reconnaissance d'image IA + plans repas |
 | `etl` | — | One-shot Python/Pandas — génère `mspr_etl.db` depuis les CSV/JSON |
-| `airflow-apiserver` | 8081 | Interface Airflow (UI) |
+| `airflow-apiserver` | 8080 | Interface Airflow (UI) |
 | `airflow-scheduler` | interne | Planificateur — relance l'ETL quotidiennement à 02h00 |
 | `airflow-postgres` | interne 5432 | PostgreSQL — état interne Airflow uniquement |
 
@@ -73,7 +73,7 @@ docker compose up --build
 
 - App admin (MSPR1) : **http://localhost**
 - App utilisateur (MSPR2) : **http://localhost:81**
-- Airflow UI : **http://localhost:8081** (login : `airflow` / `airflow`)
+- Airflow UI : **http://localhost:8080** (login : `airflow` / `airflow`)
 
 L'ordre de démarrage est géré automatiquement : ETL → app-postgres + mongo + nutrition-api → backend → frontend + frontend-user.
 
