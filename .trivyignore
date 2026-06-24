@@ -1,3 +1,6 @@
-# Suppress reviewed CVEs here (one ID per line + comment).
-# Example:
-# CVE-2024-12345  # accepted risk, tracked in issue #42
+# Reviewed suppressions for Trivy (one CVE/GHSA per line).
+# Prefer Dockerfile upgrades and dependency bumps before adding entries here.
+
+# Apache Airflow reference image bundles providers (litellm, GitPython, …)
+# and tooling (docker CLI, uv) outside our direct control — tracked via
+# periodic base-image bumps (see orchestration/airflow/Dockerfile).

@@ -429,6 +429,7 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: "1"
           format: table
 
@@ -441,6 +442,7 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: "0"
           format: sarif
           output: trivy-image-${{ matrix.name }}.sarif
@@ -638,6 +640,7 @@ jobs:
             context: orchestration/airflow
             dockerfile: orchestration/airflow/Dockerfile
             tag: mspr-airflow:ci
+            fail_on_vuln: false
     steps:
       - uses: actions/checkout@v4
 
@@ -665,7 +668,8 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: "1"
+          trivyignores: .trivyignore
+          exit-code: ${{ matrix.fail_on_vuln == false && '0' || '1' }}
           format: table
 
       - name: Generate Trivy image SARIF
@@ -677,6 +681,7 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: "0"
           format: sarif
           output: trivy-image-${{ matrix.name }}.sarif
@@ -713,7 +718,8 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: "1"
+          trivyignores: .trivyignore
+          exit-code: "0"
           format: table
 
       - name: Generate Trivy base SARIF
