@@ -417,7 +417,8 @@ services:
 
   # ---------------------------------------------------------------------------
   # Code quality — SonarQube (local, demo only). Started on demand:
-  #   docker compose --profile sonar up -d sonarqube   (UI: http://localhost:9000)
+  #   docker compose --profile sonar up -d sonarqube   (UI: http://localhost:9002)
+  # Port hôte 9002 (9000 souvent pris par Portainer / autres outils).
   # Uses the embedded H2 database: fine for a local demo, NOT for production.
   # Requires host setting: sudo sysctl -w vm.max_map_count=262144
   # ---------------------------------------------------------------------------
@@ -425,7 +426,7 @@ services:
     image: sonarqube:community
     profiles: [sonar]
     ports:
-      - "9000:9000"
+      - "${SONAR_PORT:-9002}:9000"
     environment:
       SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
     volumes:

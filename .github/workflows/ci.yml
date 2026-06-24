@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, app]
   pull_request:
-    branches: [main]
+    branches: [main, app]
   schedule:
     # Weekly: ML dependency audit + full Docker image scans
     - cron: "0 6 * * 1"
@@ -406,13 +406,13 @@ jobs:
           category: trivy-image-${{ matrix.name }}
 
   # ===========================================================================
-  # Stage 3b — Continuous Delivery: publish images to GHCR (main only)
+  # Stage 3b — Continuous Delivery: publish images to GHCR (main + app)
   # ===========================================================================
 
   publish-images:
     name: "3 · Publish image → GHCR (${{ matrix.name }})"
     needs: [trivy-images-core]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/app')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -478,6 +478,78 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ===========================================================================
+  # Stage 3c — SonarQube quality analysis (ephemeral local instance in CI)
+  # ===========================================================================
+
+  sonarqube-scan:
+    name: "3 · SonarQube quality analysis"
+    needs: [tests-coverage, frontend-user]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Increase vm.max_map_count for SonarQube
+        run: sudo sysctl -w vm.max_map_count=262144
+
+      - name: Start SonarQube container
+        run: |
+          docker run -d --name sonarqube \
+            -p 9000:9000 \
+            -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
+            sonarqube:community
+
+      - name: Bootstrap SonarQube token
+        id: sonar
+        run: |
+          TOKEN=$(bash infra/scripts/sonar-ci-bootstrap.sh)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Download Python coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-reports
+          path: coverage-artifacts
+
+      - name: Prepare coverage reports for Sonar
+        run: |
+          if [ -f coverage-artifacts/coverage.xml ]; then
+            cp coverage-artifacts/coverage.xml coverage.xml
+          fi
+          if [ -d coverage-artifacts/htmlcov ]; then
+            echo "htmlcov artifact present (Python)"
+          fi
+
+      - name: Set up Node.js (frontend lcov)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/frontend-user/package-lock.json
+
+      - name: Generate frontend-user lcov
+        working-directory: apps/frontend-user
+        run: |
+          npm ci
+          npm run test:coverage
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v4.2.1
+        env:
+          SONAR_TOKEN: ${{ steps.sonar.outputs.token }}
+          SONAR_HOST_URL: http://127.0.0.1:9000
+          SONAR_SCANNER_OPTS: -Dsonar.qualitygate.wait=false
+
+      - name: SonarQube dashboard link
+        if: always()
+        run: |
+          echo "### SonarQube (job éphémère CI)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Analyse exécutée sur instance locale éphémère (non persistée)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Pour un rapport persistant : \`docker compose --profile sonar up -d\` puis \`./infra/scripts/sonar-scan.sh\`" >> "$GITHUB_STEP_SUMMARY"
 
   # ===========================================================================
   # Stage 4 — Extended scans (weekly cron or manual trigger only)

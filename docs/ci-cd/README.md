@@ -21,9 +21,10 @@ push / PR sur main
       ├── frontend-admin     lint + build
       └── frontend-user      lint + test (vitest) + build
       │
-  Stage 3 — Images
+  Stage 3 — Images & qualité
       ├── trivy-images-core  build + scan etl / backend / reco-engine
-      └── publish-images     build + push GHCR (push sur main uniquement)   ← CD
+      ├── publish-images     build + push GHCR (push sur main uniquement)   ← CD
+      └── sonarqube-scan     analyse SonarQube (instance éphémère CI)
       │
   Stage 4 — Scans étendus (cron hebdo / manuel)
       ├── dependency-audit-ml, trivy-images-full, trivy-base-images
@@ -33,37 +34,46 @@ push / PR sur main
 
 | Événement | Comportement |
 |---|---|
-| `pull_request` → main | Stages 1 → 3 (scan), **pas** de publication d'images |
-| `push` → main | Stages 1 → 3 + **publish-images** (CD vers GHCR) |
+| `pull_request` → main / app | Stages 1 → 3 (scan + SonarQube), **pas** de publication d'images |
+| `push` → main / app | Stages 1 → 3 + **publish-images** (CD vers GHCR) |
 | `schedule` (lundi 06:00) | Scans étendus (Stage 4) |
 | `workflow_dispatch` | Manuel, inclut Stage 4 |
 
-## Qualité de code — SonarQube (local)
+## Qualité de code — SonarQube
+
+### CI (GitHub Actions)
+
+Le job **`sonarqube-scan`** s'exécute sur chaque PR et push vers `main` ou `app` :
+
+1. Démarre SonarQube Community en conteneur éphémère sur le runner
+2. Récupère `coverage.xml` (artefact Python) + génère `lcov` frontend-user
+3. Lance `SonarSource/sonarqube-scan-action` (quality gate en mode non bloquant)
+
+Aucun secret GitHub requis — l'instance CI n'est **pas persistée** (démo pipeline).
+
+### Local (rapport persistant)
 
 SonarQube tourne en local (profil Docker `sonar`), conformément à l'exigence
 « tout local » de la MSPR. Configuration : [`sonar-project.properties`](../../sonar-project.properties).
 
 ```bash
-# 1. Démarrer SonarQube (UI http://localhost:9000, login admin/admin)
+# 1. Démarrer SonarQube (UI http://localhost:9002, login admin/admin)
+#    Service seul — évite de redémarrer toute la stack :
+#    docker compose --profile sonar up -d sonarqube
 #    Prérequis Linux : sudo sysctl -w vm.max_map_count=262144
 docker compose --profile sonar up -d sonarqube
 
-# 2. Générer un token : My Account > Security > Generate Token
-export SONAR_TOKEN=xxxxxxxx
-
-# 3. (optionnel) couverture à jour pour Sonar
-./run_coverage.sh        # produit coverage.xml + apps/frontend-user/coverage/lcov.info
-
-# 4. Lancer l'analyse
+# 2. Lancer l'analyse (token généré automatiquement si absent)
+#    (optionnel) couverture à jour pour Sonar : ./run_coverage.sh
 ./infra/scripts/sonar-scan.sh
 ```
 
-Le rapport est disponible sur `http://localhost:9000/dashboard?id=healthai-coach`.
+Le rapport est disponible sur `http://localhost:9002/dashboard?id=healthai-coach`.
 > ⚠️ La base H2 embarquée convient à la démo, **pas** à la production.
 
 ## Livraison continue — Images GHCR
 
-Sur chaque `push` vers `main`, le job `publish-images` build et publie 7 images
+Sur chaque `push` vers `main` ou `app`, le job `publish-images` build et publie 7 images
 sur le GitHub Container Registry via le `GITHUB_TOKEN` intégré (aucun compte
 tiers requis) :
 
