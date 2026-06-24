@@ -19,7 +19,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "sum(rate(django_http_requests_total[5m])) by (method)",
+          "expr": "sum(rate(django_http_requests_total_by_method_total[5m])) by (method)",
           "legendFormat": "{{method}}",
           "refId": "A"
         }
@@ -30,19 +30,24 @@
     {
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "fieldConfig": {
-        "defaults": { "unit": "percentunit", "max": 1, "min": 0 },
+        "defaults": { "unit": "percent", "max": 100, "min": 0 },
         "overrides": []
       },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "id": 2,
       "targets": [
         {
-          "expr": "sum(rate(container_cpu_usage_seconds_total{name=~\"mspr_etl-backend-1|mspr_etl-nutrition-api-1|mspr_etl-reco-engine-1\"}[5m])) by (name)",
-          "legendFormat": "{{name}}",
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "legendFormat": "CPU hôte",
           "refId": "A"
+        },
+        {
+          "expr": "100 * sum(rate(container_cpu_usage_seconds_total{cpu=\"total\",container_label_com_docker_compose_service=~\"backend|nutrition-api|reco-engine\"}[5m])) by (container_label_com_docker_compose_service)",
+          "legendFormat": "{{container_label_com_docker_compose_service}}",
+          "refId": "B"
         }
       ],
-      "title": "Conteneurs — CPU (cAdvisor)",
+      "title": "CPU — hôte (node-exporter) + services (cAdvisor)",
       "type": "timeseries"
     },
     {
@@ -55,12 +60,17 @@
       "id": 3,
       "targets": [
         {
-          "expr": "container_memory_usage_bytes{name=~\"mspr_etl-backend-1|mspr_etl-app-postgres-1|mspr_etl-mongo-1\"}",
-          "legendFormat": "{{name}}",
+          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+          "legendFormat": "mémoire hôte utilisée",
           "refId": "A"
+        },
+        {
+          "expr": "container_memory_usage_bytes{container_label_com_docker_compose_service=~\"backend|app-postgres|mongo|nutrition-api|reco-engine\"}",
+          "legendFormat": "{{container_label_com_docker_compose_service}}",
+          "refId": "B"
         }
       ],
-      "title": "Conteneurs — mémoire (cAdvisor)",
+      "title": "Mémoire — hôte (node-exporter) + services (cAdvisor)",
       "type": "timeseries"
     },
     {
@@ -104,7 +114,7 @@
       "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "up{job=~\"django-backend|postgres-app|cadvisor|prometheus\"}",
+          "expr": "up{job=~\"django-backend|postgres-app|postgres-airflow|cadvisor|node-exporter|prometheus\"}",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -122,5 +132,5 @@
   "timezone": "browser",
   "title": "HealthAI Coach — Stack",
   "uid": "healthai-stack",
-  "version": 1
+  "version": 2
 }

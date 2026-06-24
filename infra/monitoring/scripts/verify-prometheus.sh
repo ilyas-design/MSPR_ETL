@@ -8,9 +8,9 @@ BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
 echo "==> Backend /metrics"
 curl -sf "${BACKEND_URL}/metrics" | head -5
 echo "... (truncated)"
-curl -sf "${BACKEND_URL}/metrics" | grep -q "django_http_requests_total" \
-  && echo "OK: django_http_requests_total present" \
-  || echo "WARN: django_http_requests_total not found yet (may appear after first request)"
+curl -sf "${BACKEND_URL}/metrics" | grep -qE "django_http_requests_total(_by_method_total)?" \
+  && echo "OK: django HTTP request metrics present" \
+  || echo "WARN: django HTTP metrics not found yet (may appear after first request)"
 
 echo ""
 echo "==> Prometheus targets"
