@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Bootstrap SonarQube for CI: wait until UP, set admin password, emit a scan token.
+# Logs on stderr ; only the token is printed on stdout (safe for $(...) capture).
 # Usage: SONAR_HOST=http://localhost:9000 ./infra/scripts/sonar-ci-bootstrap.sh
 set -euo pipefail
 
@@ -8,10 +9,10 @@ ADMIN_USER="${SONAR_ADMIN_USER:-admin}"
 ADMIN_PASS="${SONAR_ADMIN_PASS:-admin}"
 CI_PASS="${SONAR_CI_ADMIN_PASS:-CiAdminPass123!}"
 
-echo "==> Attente de SonarQube ($SONAR_HOST)..."
+echo "==> Attente de SonarQube ($SONAR_HOST)..." >&2
 for _ in $(seq 1 60); do
   if curl -sf "$SONAR_HOST/api/system/status" | grep -q '"status":"UP"'; then
-    echo "  SonarQube est UP."
+    echo "  SonarQube est UP." >&2
     break
   fi
   sleep 10
@@ -22,7 +23,7 @@ if ! curl -sf "$SONAR_HOST/api/system/status" | grep -q '"status":"UP"'; then
   exit 1
 fi
 
-echo "==> Configuration du compte admin..."
+echo "==> Configuration du compte admin..." >&2
 curl -sf -u "$ADMIN_USER:$ADMIN_PASS" -X POST \
   "$SONAR_HOST/api/users/change_password" \
   -H 'Content-Type: application/x-www-form-urlencoded' \
@@ -34,7 +35,7 @@ if ! curl -sf -u "$ADMIN_USER:$AUTH_PASS" "$SONAR_HOST/api/authentication/valida
   AUTH_PASS="$ADMIN_PASS"
 fi
 
-echo "==> Génération du token CI..."
+echo "==> Génération du token CI..." >&2
 RESP=$(curl -sf -u "$ADMIN_USER:$AUTH_PASS" -X POST \
   "$SONAR_HOST/api/user_tokens/generate" \
   -H 'Content-Type: application/x-www-form-urlencoded' \
@@ -52,4 +53,5 @@ if [ -z "$TOKEN" ]; then
   exit 1
 fi
 
+# stdout uniquement — pour TOKEN=$(...) en CI
 echo "$TOKEN"

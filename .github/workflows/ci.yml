@@ -507,7 +507,7 @@ jobs:
         run: |
           TOKEN=$(bash infra/scripts/sonar-ci-bootstrap.sh)
           echo "::add-mask::$TOKEN"
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "token=${TOKEN}" >> "$GITHUB_OUTPUT"
 
       - name: Download Python coverage artifact
         uses: actions/download-artifact@v4
