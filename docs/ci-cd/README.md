@@ -22,9 +22,9 @@ push / PR sur main
       └── frontend-user      lint + test (vitest) + build
       │
   Stage 3 — Images & qualité
-      ├── trivy-images-core  build + scan etl / backend / reco-engine
-      ├── publish-images     build + push GHCR (push sur main uniquement)   ← CD
-      └── sonarqube-scan     analyse SonarQube (instance éphémère CI)
+      ├── trivy-images-core  build + scan etl / backend / reco-engine (cache GHA)
+      ├── publish-images     build + push GHCR (push sur main/app, cache GHA)   ← CD
+      └── sonarqube-scan     analyse SonarQube (réutilise lcov frontend-user)
       │
   Stage 4 — Scans étendus (cron hebdo / manuel)
       ├── dependency-audit-ml, trivy-images-full, trivy-base-images
@@ -121,6 +121,12 @@ l'API réponde sur `http://localhost:8000`.
 
 ## Maintenance
 
+- **Cache CI** (accélère les runs suivants) :
+  - **pip** : cache GitHub Actions partagé via `PIP_CACHE_PATHS` (tous les `requirements.txt`)
+  - **npm** : cache `setup-node` sur les `package-lock.json` front
+  - **Docker** : cache BuildKit `type=gha` par image (`scope=mspr-<service>`) — réutilisé entre scan Trivy et publish GHCR
+  - **Trivy DB** : action [`.github/actions/cache-trivy`](../../.github/actions/cache-trivy) (`~/.cache/trivy`)
+  - **SonarQube** : le `lcov` frontend est produit une seule fois dans `frontend-user` puis réutilisé par `sonarqube-scan`
 - **Seuil de couverture** : `fail_under = 70` dans [`.coveragerc`](../../.coveragerc).
 - **Ajouter un service au CD** : ajouter une entrée à la matrice `publish-images`
   (name/context/dockerfile) et au besoin à `docker-compose.ghcr.yml`.

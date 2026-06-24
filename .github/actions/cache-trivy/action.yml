@@ -1,0 +1,13 @@
+name: Cache Trivy vulnerability DB
+description: Restore/save ~/.cache/trivy to speed up Trivy scans across jobs.
+
+runs:
+  using: composite
+  steps:
+    - name: Cache Trivy DB
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/trivy
+        key: trivy-db-v1-${{ runner.os }}
+        restore-keys: |
+          trivy-db-v1-${{ runner.os }}-

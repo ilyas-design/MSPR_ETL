@@ -17,6 +17,14 @@ concurrency:
 permissions:
   contents: read
   security-events: write
+  actions: write
+
+env:
+  PIP_CACHE_PATHS: |
+    etl/requirements.txt
+    services/backend/requirements.txt
+    services/nutrition-api/requirements.txt
+    services/reco-engine/requirements.txt
 
 jobs:
   # ===========================================================================
@@ -33,6 +41,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ${{ env.PIP_CACHE_PATHS }}
 
       - name: Install pip-audit
         run: python -m pip install --upgrade pip pip-audit
@@ -51,7 +61,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: apps/frontend-admin/package-lock.json
+          cache-dependency-path: |
+            apps/frontend-admin/package-lock.json
+            apps/frontend-user/package-lock.json
 
       - name: npm audit — frontend-admin
         working-directory: apps/frontend-admin
@@ -75,6 +87,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ${{ env.PIP_CACHE_PATHS }}
 
       - name: Install Bandit
         run: pip install "bandit[toml]"
@@ -102,6 +116,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/cache-trivy
 
       - name: Run Trivy (filesystem)
         uses: aquasecurity/trivy-action@v0.36.0
@@ -174,11 +190,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: |
-            etl/requirements.txt
-            services/backend/requirements.txt
-            services/nutrition-api/requirements.txt
-            services/reco-engine/requirements.txt
+          cache-dependency-path: ${{ env.PIP_CACHE_PATHS }}
 
       - name: Install dependencies
         run: |
@@ -188,6 +200,16 @@ jobs:
           pip install -r services/nutrition-api/requirements.txt
           pip install -r services/reco-engine/requirements.txt
           pip install coverage
+
+      - name: Cache pytest
+        uses: actions/cache@v4
+        with:
+          path: |
+            services/nutrition-api/.pytest_cache
+            services/reco-engine/.pytest_cache
+          key: pytest-${{ runner.os }}-${{ hashFiles('services/nutrition-api/tests/**', 'services/reco-engine/tests/**', 'services/nutrition-api/requirements.txt', 'services/reco-engine/requirements.txt') }}
+          restore-keys: |
+            pytest-${{ runner.os }}-
 
       - name: Run ETL unit tests under coverage
         run: PYTHONPATH=etl python -m coverage run --rcfile=.coveragerc -m unittest discover -s etl/tests -v
@@ -235,7 +257,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: etl/requirements.txt
+          cache-dependency-path: ${{ env.PIP_CACHE_PATHS }}
 
       - name: Install ETL dependencies
         run: |
@@ -289,7 +311,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: apps/frontend-admin/package-lock.json
+          cache-dependency-path: |
+            apps/frontend-admin/package-lock.json
+            apps/frontend-user/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -323,7 +347,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: apps/frontend-user/package-lock.json
+          cache-dependency-path: |
+            apps/frontend-admin/package-lock.json
+            apps/frontend-user/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -331,8 +357,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm run test
+      - name: Test + coverage (Sonar lcov)
+        run: npm run test:coverage
 
       - name: Build
         run: npm run build
@@ -343,6 +369,14 @@ jobs:
           name: frontend-user-dist
           path: apps/frontend-user/dist/
           retention-days: 14
+
+      - name: Upload lcov for SonarQube
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-user-lcov
+          path: apps/frontend-user/coverage/
+          retention-days: 14
+          if-no-files-found: error
 
   # ===========================================================================
   # Stage 3 — Docker image scan (after tests & builds pass)
@@ -371,8 +405,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image
-        run: docker build -t "${{ matrix.tag }}" -f "${{ matrix.dockerfile }}" "${{ matrix.context }}"
+      - uses: ./.github/actions/cache-trivy
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (GHA cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          tags: ${{ matrix.tag }}
+          load: true
+          push: false
+          cache-from: type=gha,scope=mspr-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=mspr-${{ matrix.name }}
 
       - name: Run Trivy (image)
         uses: aquasecurity/trivy-action@v0.36.0
@@ -476,8 +523,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=mspr-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=mspr-${{ matrix.name }}
 
   # ===========================================================================
   # Stage 3c — SonarQube quality analysis (ephemeral local instance in CI)
@@ -520,22 +567,12 @@ jobs:
           if [ -f coverage-artifacts/coverage.xml ]; then
             cp coverage-artifacts/coverage.xml coverage.xml
           fi
-          if [ -d coverage-artifacts/htmlcov ]; then
-            echo "htmlcov artifact present (Python)"
-          fi
 
-      - name: Set up Node.js (frontend lcov)
-        uses: actions/setup-node@v4
+      - name: Download frontend lcov (from frontend-user job)
+        uses: actions/download-artifact@v4
         with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: apps/frontend-user/package-lock.json
-
-      - name: Generate frontend-user lcov
-        working-directory: apps/frontend-user
-        run: |
-          npm ci
-          npm run test:coverage
+          name: frontend-user-lcov
+          path: apps/frontend-user/coverage
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v4.2.1
@@ -567,6 +604,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/nutrition-api/requirements.txt
 
       - name: Install pip-audit
         run: python -m pip install --upgrade pip pip-audit
@@ -602,8 +641,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image
-        run: docker build -t "${{ matrix.tag }}" -f "${{ matrix.dockerfile }}" "${{ matrix.context }}"
+      - uses: ./.github/actions/cache-trivy
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (GHA cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          tags: ${{ matrix.tag }}
+          load: true
+          push: false
+          cache-from: type=gha,scope=mspr-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=mspr-${{ matrix.name }}
 
       - name: Run Trivy (image)
         uses: aquasecurity/trivy-action@v0.36.0
@@ -646,6 +698,10 @@ jobs:
       matrix:
         image: [postgres:16, mongo:7]
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/cache-trivy
+
       - name: Pull image
         run: docker pull "${{ matrix.image }}"
 
