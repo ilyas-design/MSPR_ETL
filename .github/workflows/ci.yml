@@ -38,29 +38,29 @@ jobs:
         run: python -m pip install --upgrade pip pip-audit
 
       - name: pip-audit — ETL
-        run: pip-audit -r requirements.txt
+        run: pip-audit -r etl/requirements.txt
 
       - name: pip-audit — backend
-        run: pip-audit -r backend/requirements.txt
+        run: pip-audit -r services/backend/requirements.txt
 
       - name: pip-audit — reco-engine
-        run: pip-audit -r reco-engine/requirements.txt
+        run: pip-audit -r services/reco-engine/requirements.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: apps/frontend-admin/package-lock.json
 
-      - name: npm audit — frontend
-        working-directory: frontend
+      - name: npm audit — frontend-admin
+        working-directory: apps/frontend-admin
         run: |
           npm ci
           npm audit --omit=dev --audit-level=high
 
       - name: npm audit — frontend-user
-        working-directory: frontend-user
+        working-directory: apps/frontend-user
         run: |
           npm ci
           npm audit --omit=dev --audit-level=high
@@ -81,11 +81,11 @@ jobs:
 
       - name: Run Bandit
         run: |
-          bandit -r Pipelines backend nutrition-api reco-engine airflow \
+          bandit -r etl/Pipelines services/backend services/nutrition-api services/reco-engine orchestration/airflow \
             -x '*/tests/*,*test*.py,*/migrations/*,*/.pytest_cache/*' \
             -lll \
             -f json -o bandit-report.json || true
-          bandit -r Pipelines backend nutrition-api reco-engine airflow \
+          bandit -r etl/Pipelines services/backend services/nutrition-api services/reco-engine orchestration/airflow \
             -x '*/tests/*,*test*.py,*/migrations/*,*/.pytest_cache/*' \
             -lll
 
@@ -113,9 +113,8 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           format: table
-          skip-dirs: node_modules,htmlcov,.pytest_cache,airflow/logs,frontend/dist,frontend-user/dist,.git,graphify-out,nutrition-api
+          skip-dirs: node_modules,htmlcov,.pytest_cache,orchestration/airflow/logs,apps/frontend-admin/dist,apps/frontend-user/dist,.git,services/nutrition-api
           skip-files: docker-compose.yml,.env.example
-
       - name: Upload Trivy FS SARIF
         uses: aquasecurity/trivy-action@v0.36.0
         if: always()
@@ -128,9 +127,8 @@ jobs:
           exit-code: "0"
           format: sarif
           output: trivy-fs.sarif
-          skip-dirs: node_modules,htmlcov,.pytest_cache,airflow/logs,frontend/dist,frontend-user/dist,.git,graphify-out,nutrition-api
+          skip-dirs: node_modules,htmlcov,.pytest_cache,orchestration/airflow/logs,apps/frontend-admin/dist,apps/frontend-user/dist,.git,services/nutrition-api
           skip-files: docker-compose.yml,.env.example
-
       - name: Publish Trivy FS SARIF
         uses: github/codeql-action/upload-sarif@v3
         if: always()
@@ -177,48 +175,52 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: |
-            requirements.txt
-            backend/requirements.txt
-            nutrition-api/requirements.txt
-            reco-engine/requirements.txt
+            etl/requirements.txt
+            services/backend/requirements.txt
+            services/nutrition-api/requirements.txt
+            services/reco-engine/requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r backend/requirements.txt
-          pip install -r nutrition-api/requirements.txt
-          pip install -r reco-engine/requirements.txt
+          pip install -r etl/requirements.txt
+          pip install -r services/backend/requirements.txt
+          pip install -r services/nutrition-api/requirements.txt
+          pip install -r services/reco-engine/requirements.txt
           pip install coverage
 
       - name: Run ETL unit tests under coverage
-        run: python -m coverage run --rcfile=.coveragerc -m unittest discover -s tests -v
+        run: PYTHONPATH=etl python -m coverage run --rcfile=.coveragerc -m unittest discover -s etl/tests -v
 
       - name: Run Django API tests under coverage
-        working-directory: backend
-        run: python -m coverage run --append --rcfile=../.coveragerc manage.py test -v 2
+        working-directory: services/backend
+        run: python -m coverage run --append --rcfile=../../.coveragerc manage.py test -v 2
 
       - name: Run nutrition-api tests under coverage
-        working-directory: nutrition-api
-        run: python -m coverage run --append --rcfile=../.coveragerc --source=app -m pytest -v
+        working-directory: services/nutrition-api
+        run: python -m coverage run --append --rcfile=../../.coveragerc --source=app -m pytest -v
 
       - name: Run reco-engine tests under coverage
-        working-directory: reco-engine
-        run: python -m coverage run --append --rcfile=../.coveragerc --source=scoring,main,mongo,seed,llm,models -m pytest -v
+        working-directory: services/reco-engine
+        run: python -m coverage run --append --rcfile=../../.coveragerc --source=scoring,main,mongo,seed,llm,models -m pytest -v
 
       - name: Combined coverage report (fail if < 70%)
         run: python -m coverage report --rcfile=.coveragerc
 
-      - name: Generate HTML coverage
+      - name: Generate HTML + XML coverage
         if: always()
-        run: python -m coverage html --rcfile=.coveragerc
+        run: |
+          python -m coverage html --rcfile=.coveragerc
+          python -m coverage xml --rcfile=.coveragerc -o coverage.xml
 
-      - name: Upload coverage artifact
+      - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-html
-          path: htmlcov/
+          name: coverage-reports
+          path: |
+            htmlcov/
+            coverage.xml
           retention-days: 14
 
   etl-smoke:
@@ -233,23 +235,23 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: etl/requirements.txt
 
       - name: Install ETL dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r etl/requirements.txt
 
       - name: Run ETL pipeline
-        run: python run_pipeline.py
+        run: python etl/run_pipeline.py
 
       - name: Run monitoring (fail on WARNING / CRITICAL)
-        run: python run_monitoring.py --fail-on-warning
+        run: python etl/run_monitoring.py --fail-on-warning
 
       - name: Verify etl_run tracking
         run: |
           python - <<'PY'
-          import sqlite3, sys
+          import sqlite3
           con = sqlite3.connect("mspr_etl.db")
           rows = list(con.execute(
               "SELECT run_id, status, total_rows FROM etl_run "
@@ -272,13 +274,13 @@ jobs:
             mspr_etl.db
           retention-days: 14
 
-  frontend-build:
-    name: "2 · Frontend build (Node 22)"
+  frontend-admin:
+    name: "2 · Frontend-admin build (Node 22)"
     needs: [dependency-audit, python-sast, trivy-fs]
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: apps/frontend-admin
     steps:
       - uses: actions/checkout@v4
 
@@ -287,7 +289,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: apps/frontend-admin/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -302,8 +304,8 @@ jobs:
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-dist
-          path: frontend/dist/
+          name: frontend-admin-dist
+          path: apps/frontend-admin/dist/
           retention-days: 14
 
   frontend-user:
@@ -312,7 +314,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend-user
+        working-directory: apps/frontend-user
     steps:
       - uses: actions/checkout@v4
 
@@ -321,7 +323,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: frontend-user/package-lock.json
+          cache-dependency-path: apps/frontend-user/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -339,7 +341,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend-user-dist
-          path: frontend-user/dist/
+          path: apps/frontend-user/dist/
           retention-days: 14
 
   # ===========================================================================
@@ -348,7 +350,7 @@ jobs:
 
   trivy-images-core:
     name: "3 · Trivy image — ${{ matrix.name }}"
-    needs: [tests-coverage, etl-smoke, frontend-build, frontend-user]
+    needs: [tests-coverage, etl-smoke, frontend-admin, frontend-user]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -359,12 +361,12 @@ jobs:
             dockerfile: Dockerfile.etl
             tag: mspr-etl:ci
           - name: backend
-            context: backend
-            dockerfile: backend/Dockerfile
+            context: services/backend
+            dockerfile: services/backend/Dockerfile
             tag: mspr-backend:ci
           - name: reco-engine
-            context: reco-engine
-            dockerfile: reco-engine/Dockerfile
+            context: services/reco-engine
+            dockerfile: services/reco-engine/Dockerfile
             tag: mspr-reco-engine:ci
     steps:
       - uses: actions/checkout@v4
@@ -404,6 +406,80 @@ jobs:
           category: trivy-image-${{ matrix.name }}
 
   # ===========================================================================
+  # Stage 3b — Continuous Delivery: publish images to GHCR (main only)
+  # ===========================================================================
+
+  publish-images:
+    name: "3 · Publish image → GHCR (${{ matrix.name }})"
+    needs: [trivy-images-core]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: etl
+            context: .
+            dockerfile: Dockerfile.etl
+          - name: backend
+            context: services/backend
+            dockerfile: services/backend/Dockerfile
+          - name: nutrition-api
+            context: services/nutrition-api
+            dockerfile: services/nutrition-api/Dockerfile
+          - name: reco-engine
+            context: services/reco-engine
+            dockerfile: services/reco-engine/Dockerfile
+          - name: frontend-admin
+            context: apps/frontend-admin
+            dockerfile: apps/frontend-admin/Dockerfile
+          - name: frontend-user
+            context: apps/frontend-user
+            dockerfile: apps/frontend-user/Dockerfile
+          - name: airflow
+            context: orchestration/airflow
+            dockerfile: orchestration/airflow/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase image namespace
+        id: ns
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.ns.outputs.owner }}/mspr-${{ matrix.name }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ===========================================================================
   # Stage 4 — Extended scans (weekly cron or manual trigger only)
   # ===========================================================================
 
@@ -424,7 +500,7 @@ jobs:
         run: python -m pip install --upgrade pip pip-audit
 
       - name: pip-audit — nutrition-api
-        run: pip-audit -r nutrition-api/requirements.txt
+        run: pip-audit -r services/nutrition-api/requirements.txt
 
   trivy-images-full:
     name: "4 · Trivy image (full) — ${{ matrix.name }}"
@@ -436,20 +512,20 @@ jobs:
       matrix:
         include:
           - name: nutrition-api
-            context: nutrition-api
-            dockerfile: nutrition-api/Dockerfile
+            context: services/nutrition-api
+            dockerfile: services/nutrition-api/Dockerfile
             tag: mspr-nutrition-api:ci
-          - name: frontend
-            context: frontend
-            dockerfile: frontend/Dockerfile
-            tag: mspr-frontend:ci
+          - name: frontend-admin
+            context: apps/frontend-admin
+            dockerfile: apps/frontend-admin/Dockerfile
+            tag: mspr-frontend-admin:ci
           - name: frontend-user
-            context: frontend-user
-            dockerfile: frontend-user/Dockerfile
+            context: apps/frontend-user
+            dockerfile: apps/frontend-user/Dockerfile
             tag: mspr-frontend-user:ci
           - name: airflow
-            context: airflow
-            dockerfile: airflow/Dockerfile
+            context: orchestration/airflow
+            dockerfile: orchestration/airflow/Dockerfile
             tag: mspr-airflow:ci
     steps:
       - uses: actions/checkout@v4

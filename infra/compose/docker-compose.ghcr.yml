@@ -1,0 +1,34 @@
+# ---------------------------------------------------------------------------
+# Override "déploiement" : utilise les images publiées sur GHCR par la CI
+# au lieu de builder localement. Cible = poste local (cf. MSPR « tout local »).
+#
+# Variables (avec valeurs par défaut) :
+#   REGISTRY  registry + namespace      (défaut: ghcr.io/ilyas-design)
+#   TAG       tag d'image à déployer     (défaut: latest)
+#
+# Lancé via infra/scripts/deploy.sh.
+# ---------------------------------------------------------------------------
+services:
+  etl:
+    image: ${REGISTRY:-ghcr.io/ilyas-design}/mspr-etl:${TAG:-latest}
+    pull_policy: always
+
+  backend:
+    image: ${REGISTRY:-ghcr.io/ilyas-design}/mspr-backend:${TAG:-latest}
+    pull_policy: always
+
+  nutrition-api:
+    image: ${REGISTRY:-ghcr.io/ilyas-design}/mspr-nutrition-api:${TAG:-latest}
+    pull_policy: always
+
+  reco-engine:
+    image: ${REGISTRY:-ghcr.io/ilyas-design}/mspr-reco-engine:${TAG:-latest}
+    pull_policy: always
+
+  frontend:
+    image: ${REGISTRY:-ghcr.io/ilyas-design}/mspr-frontend-admin:${TAG:-latest}
+    pull_policy: always
+
+  frontend-user:
+    image: ${REGISTRY:-ghcr.io/ilyas-design}/mspr-frontend-user:${TAG:-latest}
+    pull_policy: always
